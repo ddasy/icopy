@@ -44,9 +44,12 @@ final class ClipboardPanelWindowController {
         let window = NSWindow(contentViewController: controller)
         window.title = "iCopy"
         window.setContentSize(NSSize(width: 440, height: 560))
-        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.styleMask = [.titled, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.standardWindowButton(.closeButton)?.isHidden = true
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        window.standardWindowButton(.zoomButton)?.isHidden = true
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = true

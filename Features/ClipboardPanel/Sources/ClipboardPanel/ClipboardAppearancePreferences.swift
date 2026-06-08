@@ -8,14 +8,22 @@ public final class ClipboardAppearancePreferences: ObservableObject {
 
     @Published public var panelOpacity: Double {
         didSet {
-            panelOpacity = Self.clamp(panelOpacity)
+            let clampedValue = Self.clamp(panelOpacity)
+            if panelOpacity != clampedValue {
+                panelOpacity = clampedValue
+                return
+            }
             UserDefaults.standard.set(panelOpacity, forKey: Self.panelOpacityKey)
         }
     }
 
     @Published public var textIntensity: Double {
         didSet {
-            textIntensity = Self.clamp(textIntensity)
+            let clampedValue = Self.clamp(textIntensity)
+            if textIntensity != clampedValue {
+                textIntensity = clampedValue
+                return
+            }
             UserDefaults.standard.set(textIntensity, forKey: Self.textIntensityKey)
         }
     }

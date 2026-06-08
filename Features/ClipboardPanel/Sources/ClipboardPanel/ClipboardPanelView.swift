@@ -52,13 +52,6 @@ public struct ClipboardPanelView: View {
                 Text("iCopy")
                     .font(.system(size: 15, weight: .semibold))
 
-                Text("\(viewModel.visibleItems.count)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Color.accentColor.opacity(0.18), in: Capsule())
-                    .foregroundStyle(Color.accentColor)
-
                 Spacer()
 
                 Button(action: openSettings) {

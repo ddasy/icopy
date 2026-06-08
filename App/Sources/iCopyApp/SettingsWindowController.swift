@@ -16,6 +16,7 @@ final class SettingsWindowController {
     func show() {
         let window = window ?? makeWindow()
         self.window = window
+        window.level = .floating + 1
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -29,6 +30,7 @@ final class SettingsWindowController {
         window.setContentSize(NSSize(width: 680, height: 420))
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
+        window.level = .floating + 1
         return window
     }
 }

@@ -27,17 +27,10 @@ public struct ClipboardItemRow: View {
     }
 
     public var body: some View {
-        let secondary = solid ? AnyShapeStyle(Color(nsColor: .labelColor).opacity(0.74)) : AnyShapeStyle(.secondary)
-
         HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.displayTitle.isEmpty ? "空文本" : item.displayTitle)
-                    .lineLimit(1)
-                    .font(.system(size: 13, weight: .medium))
-                Text(item.lastCopiedAt, style: .relative)
-                    .font(.caption)
-                    .foregroundStyle(secondary)
-            }
+            Text(item.displayTitle.isEmpty ? "空文本" : item.displayTitle)
+                .lineLimit(1)
+                .font(.system(size: 13, weight: .medium))
 
             Spacer(minLength: 8)
 
