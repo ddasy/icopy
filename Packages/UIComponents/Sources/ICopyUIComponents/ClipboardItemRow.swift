@@ -27,6 +27,16 @@ public struct ClipboardItemRow: View {
     }
 
     public var body: some View {
+        RightClickableRow(action: onRename) {
+            rowContent
+                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onCopy)
+        }
+    }
+
+    private var rowContent: some View {
         HStack(spacing: 10) {
             Text(item.displayTitle.isEmpty ? "空文本" : item.displayTitle)
                 .lineLimit(1)
@@ -52,32 +62,39 @@ public struct ClipboardItemRow: View {
             .buttonStyle(.plain)
             .help("删除")
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onCopy)
-        .background(RightClickActionView(action: onRename))
     }
 }
 
-private struct RightClickActionView: NSViewRepresentable {
+private struct RightClickableRow<Content: View>: NSViewRepresentable {
     let action: () -> Void
+    let content: Content
 
-    func makeNSView(context: Context) -> RightClickView {
-        RightClickView(action: action)
+    init(action: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+        self.action = action
+        self.content = content()
     }
 
-    func updateNSView(_ nsView: RightClickView, context: Context) {
+    func makeNSView(context: Context) -> RightClickableHostingView<Content> {
+        RightClickableHostingView(rootView: content, action: action)
+    }
+
+    func updateNSView(_ nsView: RightClickableHostingView<Content>, context: Context) {
         nsView.action = action
+        nsView.rootView = content
     }
 }
 
-private final class RightClickView: NSView {
+private final class RightClickableHostingView<Content: View>: NSHostingView<Content> {
     var action: () -> Void
 
-    init(action: @escaping () -> Void) {
+    init(rootView: Content, action: @escaping () -> Void) {
         self.action = action
-        super.init(frame: .zero)
+        super.init(rootView: rootView)
+    }
+
+    required init(rootView: Content) {
+        self.action = {}
+        super.init(rootView: rootView)
     }
 
     @available(*, unavailable)
