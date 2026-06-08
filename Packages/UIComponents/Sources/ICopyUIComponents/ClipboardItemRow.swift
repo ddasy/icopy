@@ -9,8 +9,11 @@ public struct ClipboardItemRow: View {
     private let onRename: () -> Void
     private let onToggleFavorite: () -> Void
     private let onDelete: () -> Void
+    private let onExpansionChange: (Bool) -> Void
     @State private var isHoverReady = false
     @State private var hoverTask: Task<Void, Never>?
+    @State private var isRowHovered = false
+    @State private var isDetailHovered = false
     @State private var availableTextWidth: CGFloat = 0
     @State private var collapsedTextWidth: CGFloat = 0
 
@@ -20,7 +23,8 @@ public struct ClipboardItemRow: View {
         onCopy: @escaping () -> Void,
         onRename: @escaping () -> Void,
         onToggleFavorite: @escaping () -> Void,
-        onDelete: @escaping () -> Void
+        onDelete: @escaping () -> Void,
+        onExpansionChange: @escaping (Bool) -> Void = { _ in }
     ) {
         self.item = item
         self.solid = solid
@@ -28,6 +32,7 @@ public struct ClipboardItemRow: View {
         self.onRename = onRename
         self.onToggleFavorite = onToggleFavorite
         self.onDelete = onDelete
+        self.onExpansionChange = onExpansionChange
     }
 
     public var body: some View {
@@ -35,13 +40,68 @@ public struct ClipboardItemRow: View {
             rowContent
                 .padding(.vertical, 8)
                 .padding(.horizontal, 10)
+                .background(rowBackground)
+                .overlay(rowBorder)
+                .overlay(alignment: .topLeading) {
+                    detailLayer
+                }
+                .shadow(
+                    color: .clear,
+                    radius: 10,
+                    x: 0,
+                    y: 6
+                )
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onCopy)
-                .onHover(perform: updateHover)
+                .onHover { setRowHover($0) }
                 .onDisappear {
                     cancelHoverExpansion()
+                    onExpansionChange(false)
+                }
+                .onChange(of: isExpanded) { _, expanded in
+                    onExpansionChange(expanded)
                 }
                 .animation(.easeInOut(duration: 0.12), value: isExpanded)
+        }
+    }
+
+    private var rowBackground: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(
+                Color(nsColor: .controlBackgroundColor)
+                    .opacity(solid ? 0.2 : 0.34)
+            )
+    }
+
+    private var rowBorder: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .strokeBorder(
+                Color(nsColor: .separatorColor)
+                    .opacity(0)
+            )
+    }
+
+    @ViewBuilder
+    private var detailLayer: some View {
+        if isExpanded {
+            Text(expandedText)
+                .font(Self.rowFont)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(nsColor: .textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.65))
+                )
+                .compositingGroup()
+                .shadow(color: Color.black.opacity(solid ? 0.08 : 0.22), radius: 12, x: 0, y: 7)
+                .onHover { setDetailHover($0) }
         }
     }
 
@@ -70,9 +130,8 @@ public struct ClipboardItemRow: View {
     }
 
     private var rowText: some View {
-        Text(isExpanded ? expandedText : collapsedText)
-            .lineLimit(isExpanded ? nil : 1)
-            .fixedSize(horizontal: false, vertical: isExpanded)
+        Text(collapsedText)
+            .lineLimit(1)
             .font(Self.rowFont)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
@@ -102,12 +161,27 @@ public struct ClipboardItemRow: View {
         isHoverReady && (item.hasCustomTitle || isCollapsedTextClipped)
     }
 
-    private func updateHover(_ isHovering: Bool) {
+    private func setRowHover(_ isHovering: Bool) {
+        isRowHovered = isHovering
+        syncHoverExpansion()
+    }
+
+    private func setDetailHover(_ isHovering: Bool) {
+        isDetailHovered = isHovering
+        syncHoverExpansion()
+    }
+
+    /// 行与展开层共同决定悬浮状态:展开层会溢出行的边界,只有当鼠标
+    /// 既不在行上、也不在展开层上时才收回,避免移入溢出区域被误判为离开。
+    private func syncHoverExpansion() {
         hoverTask?.cancel()
-        guard isHovering else {
+
+        guard isRowHovered || isDetailHovered else {
             isHoverReady = false
             return
         }
+
+        guard !isHoverReady else { return }
 
         hoverTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
@@ -119,6 +193,8 @@ public struct ClipboardItemRow: View {
     private func cancelHoverExpansion() {
         hoverTask?.cancel()
         hoverTask = nil
+        isRowHovered = false
+        isDetailHovered = false
         isHoverReady = false
     }
 

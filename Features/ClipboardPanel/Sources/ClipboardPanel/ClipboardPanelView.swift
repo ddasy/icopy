@@ -7,6 +7,7 @@ public struct ClipboardPanelView: View {
     @ObservedObject private var appearance: ClipboardAppearancePreferences
     @State private var itemBeingRenamed: RenameDraft?
     @State private var itemPendingDeletion: ClipboardItem?
+    @State private var expandedItemID: ClipboardItem.ID?
     private let openSettings: () -> Void
 
     public init(
@@ -118,7 +119,7 @@ public struct ClipboardPanelView: View {
         } else {
             ScrollView {
                 deepened { solid in
-                    LazyVStack(spacing: 8) {
+                    VStack(spacing: 8) {
                         ForEach(viewModel.visibleItems) { item in
                             ClipboardItemRow(
                                 item: item,
@@ -126,12 +127,16 @@ public struct ClipboardPanelView: View {
                                 onCopy: { viewModel.copy(item) },
                                 onRename: { itemBeingRenamed = RenameDraft(item: item) },
                                 onToggleFavorite: { viewModel.toggleFavorite(item) },
-                                onDelete: { requestDelete(item) }
+                                onDelete: { requestDelete(item) },
+                                onExpansionChange: { expanded in
+                                    if expanded {
+                                        expandedItemID = item.id
+                                    } else if expandedItemID == item.id {
+                                        expandedItemID = nil
+                                    }
+                                }
                             )
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(Color(nsColor: .controlBackgroundColor).opacity(solid ? 0.2 : 0.34))
-                            )
+                            .zIndex(expandedItemID == item.id ? 1 : 0)
                         }
                     }
                     .padding(10)
