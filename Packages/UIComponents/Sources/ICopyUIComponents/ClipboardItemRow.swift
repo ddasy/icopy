@@ -11,9 +11,13 @@ public struct ClipboardItemRow: View {
     private let onDelete: () -> Void
     private let onExpansionChange: (Bool) -> Void
     @State private var isHoverReady = false
-    @State private var hoverTask: Task<Void, Never>?
+    @State private var expandTask: Task<Void, Never>?
+    @State private var collapseTask: Task<Void, Never>?
+    @State private var mouseEventMonitor: Any?
     @State private var isRowHovered = false
-    @State private var isDetailHovered = false
+    @State private var isPointerInDetailLayer = false
+    @State private var isActionHovered = false
+    @State private var detailFrameInScreen: CGRect = .null
     @State private var availableTextWidth: CGFloat = 0
     @State private var collapsedTextWidth: CGFloat = 0
 
@@ -60,6 +64,14 @@ public struct ClipboardItemRow: View {
                 }
                 .onChange(of: isExpanded) { _, expanded in
                     onExpansionChange(expanded)
+                    if expanded {
+                        startMouseTracking()
+                        refreshDetailHoverState()
+                    } else {
+                        stopMouseTracking()
+                        isPointerInDetailLayer = false
+                        detailFrameInScreen = .null
+                    }
                 }
                 .animation(.easeInOut(duration: 0.12), value: isExpanded)
         }
@@ -91,17 +103,29 @@ public struct ClipboardItemRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color(nsColor: .textBackgroundColor))
-                )
+                .background(detailLayerBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .strokeBorder(Color(nsColor: .separatorColor).opacity(0.65))
                 )
                 .compositingGroup()
+                .zIndex(10)
                 .shadow(color: Color.black.opacity(solid ? 0.08 : 0.22), radius: 12, x: 0, y: 7)
-                .onHover { setDetailHover($0) }
+                .background(
+                    WindowFrameReporter { frame in
+                        detailFrameInScreen = frame
+                        refreshDetailHoverState()
+                    }
+                )
+        }
+    }
+
+    private var detailLayerBackground: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color(nsColor: .textBackgroundColor))
         }
     }
 
@@ -109,6 +133,12 @@ public struct ClipboardItemRow: View {
         HStack(alignment: .top, spacing: 10) {
             rowText
 
+            actionButtons
+        }
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 10) {
             Button(action: onToggleFavorite) {
                 Image(systemName: item.isFavorite ? "star.fill" : "star")
             }
@@ -127,6 +157,8 @@ public struct ClipboardItemRow: View {
             .buttonStyle(.plain)
             .help("删除")
         }
+        .contentShape(Rectangle())
+        .onHover { setActionHover($0) }
     }
 
     private var rowText: some View {
@@ -166,36 +198,87 @@ public struct ClipboardItemRow: View {
         syncHoverExpansion()
     }
 
-    private func setDetailHover(_ isHovering: Bool) {
-        isDetailHovered = isHovering
+    private func setActionHover(_ isHovering: Bool) {
+        isActionHovered = isHovering
         syncHoverExpansion()
     }
 
     /// 行与展开层共同决定悬浮状态:展开层会溢出行的边界,只有当鼠标
     /// 既不在行上、也不在展开层上时才收回,避免移入溢出区域被误判为离开。
     private func syncHoverExpansion() {
-        hoverTask?.cancel()
+        let canExpand = canKeepExpanded
 
-        guard isRowHovered || isDetailHovered else {
-            isHoverReady = false
+        if canExpand {
+            collapseTask?.cancel()
+            collapseTask = nil
+        } else {
+            expandTask?.cancel()
+            expandTask = nil
+            collapseTask?.cancel()
+            collapseTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(180))
+                refreshDetailHoverState()
+                guard !Task.isCancelled, !canKeepExpanded else { return }
+                isHoverReady = false
+            }
             return
         }
 
         guard !isHoverReady else { return }
 
-        hoverTask = Task { @MainActor in
+        expandTask?.cancel()
+        expandTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, canKeepExpanded else { return }
             isHoverReady = true
         }
     }
 
     private func cancelHoverExpansion() {
-        hoverTask?.cancel()
-        hoverTask = nil
+        expandTask?.cancel()
+        expandTask = nil
+        collapseTask?.cancel()
+        collapseTask = nil
+        stopMouseTracking()
         isRowHovered = false
-        isDetailHovered = false
+        isPointerInDetailLayer = false
+        isActionHovered = false
+        detailFrameInScreen = .null
         isHoverReady = false
+    }
+
+    private var canKeepExpanded: Bool {
+        (isRowHovered || isPointerInDetailLayer) && !isActionHovered
+    }
+
+    private func startMouseTracking() {
+        guard mouseEventMonitor == nil else { return }
+        mouseEventMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+        ) { event in
+            refreshDetailHoverState()
+            return event
+        }
+    }
+
+    private func stopMouseTracking() {
+        guard let mouseEventMonitor else { return }
+        NSEvent.removeMonitor(mouseEventMonitor)
+        self.mouseEventMonitor = nil
+    }
+
+    private func refreshDetailHoverState() {
+        let isInside = isMouseInsideDetailLayer
+        guard isPointerInDetailLayer != isInside else { return }
+        isPointerInDetailLayer = isInside
+        syncHoverExpansion()
+    }
+
+    private var isMouseInsideDetailLayer: Bool {
+        guard !detailFrameInScreen.isNull, !detailFrameInScreen.isEmpty else { return false }
+        return detailFrameInScreen
+            .insetBy(dx: -2, dy: -2)
+            .contains(NSEvent.mouseLocation)
     }
 
     private var isCollapsedTextClipped: Bool {
@@ -244,6 +327,61 @@ private struct WidthSampler: View {
 
     private var measuredWidth: CGFloat {
         (text as NSString).size(withAttributes: [.font: font]).width
+    }
+}
+
+private struct WindowFrameReporter: NSViewRepresentable {
+    let onChange: (CGRect) -> Void
+
+    func makeNSView(context: Context) -> FrameReportingView {
+        FrameReportingView(onChange: onChange)
+    }
+
+    func updateNSView(_ nsView: FrameReportingView, context: Context) {
+        nsView.onChange = onChange
+        nsView.reportSoon()
+    }
+}
+
+private final class FrameReportingView: NSView {
+    var onChange: (CGRect) -> Void
+
+    init(onChange: @escaping (CGRect) -> Void) {
+        self.onChange = onChange
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        reportSoon()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        reportSoon()
+    }
+
+    override func setFrameOrigin(_ newOrigin: NSPoint) {
+        super.setFrameOrigin(newOrigin)
+        reportSoon()
+    }
+
+    func reportSoon() {
+        DispatchQueue.main.async { [weak self] in
+            self?.report()
+        }
+    }
+
+    private func report() {
+        guard let window else {
+            onChange(.null)
+            return
+        }
+        onChange(window.convertToScreen(convert(bounds, to: nil)))
     }
 }
 

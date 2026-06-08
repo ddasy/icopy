@@ -118,29 +118,28 @@ public struct ClipboardPanelView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                deepened { solid in
-                    VStack(spacing: 8) {
-                        ForEach(viewModel.visibleItems) { item in
-                            ClipboardItemRow(
-                                item: item,
-                                solid: solid,
-                                onCopy: { viewModel.copy(item) },
-                                onRename: { itemBeingRenamed = RenameDraft(item: item) },
-                                onToggleFavorite: { viewModel.toggleFavorite(item) },
-                                onDelete: { requestDelete(item) },
-                                onExpansionChange: { expanded in
-                                    if expanded {
-                                        expandedItemID = item.id
-                                    } else if expandedItemID == item.id {
-                                        expandedItemID = nil
-                                    }
+                VStack(spacing: 8) {
+                    ForEach(viewModel.visibleItems) { item in
+                        ClipboardItemRow(
+                            item: item,
+                            solid: usesSolidListStyle,
+                            onCopy: { viewModel.copy(item) },
+                            onRename: { itemBeingRenamed = RenameDraft(item: item) },
+                            onToggleFavorite: { viewModel.toggleFavorite(item) },
+                            onDelete: { requestDelete(item) },
+                            onExpansionChange: { expanded in
+                                if expanded {
+                                    expandedItemID = item.id
+                                } else if expandedItemID == item.id {
+                                    expandedItemID = nil
                                 }
-                            )
-                            .zIndex(expandedItemID == item.id ? 1 : 0)
-                        }
+                            }
+                        )
+                        .zIndex(expandedItemID == item.id ? 1 : 0)
                     }
-                    .padding(10)
                 }
+                .foregroundStyle(listForegroundStyle)
+                .padding(10)
             }
             .scrollContentBackground(.hidden)
             .sheet(item: $itemBeingRenamed) { draft in
@@ -199,6 +198,14 @@ public struct ClipboardPanelView: View {
             (appearance.textIntensity - ClipboardAppearancePreferences.defaultTextIntensity)
             / (1 - ClipboardAppearancePreferences.defaultTextIntensity)
         )
+    }
+
+    private var usesSolidListStyle: Bool {
+        deepenAmount > 0
+    }
+
+    private var listForegroundStyle: AnyShapeStyle {
+        usesSolidListStyle ? solidLabel() : AnyShapeStyle(.primary)
     }
 }
 
