@@ -39,6 +39,7 @@ func renameStoresTrimmedTitle() {
 
     #expect(collection.items[0].title == "short title")
     #expect(collection.items[0].displayTitle == "short title")
+    #expect(collection.items[0].hasCustomTitle)
 }
 
 @Test

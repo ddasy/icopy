@@ -6,6 +6,7 @@ import ClipboardPanel
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let appearance = ClipboardAppearancePreferences()
+    private let loginItemSettings = LoginItemSettings()
     private lazy var shortcutSettings = ShortcutSettingsModel(preference: shortcutPreference)
     private lazy var panelController = ClipboardPanelWindowController(
         appearance: appearance,
@@ -13,7 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private lazy var settingsController = SettingsWindowController(
         appearance: appearance,
-        shortcutSettings: shortcutSettings
+        shortcutSettings: shortcutSettings,
+        loginItemSettings: loginItemSettings
     )
     private let hotKeyRegistrar = GlobalHotKeyRegistrar()
     private let doubleCommandMonitor = DoubleCommandMonitor()

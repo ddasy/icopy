@@ -6,11 +6,17 @@ import SwiftUI
 final class SettingsWindowController {
     private let appearance: ClipboardAppearancePreferences
     private let shortcutSettings: ShortcutSettingsModel
+    private let loginItemSettings: LoginItemSettings
     private var window: NSWindow?
 
-    init(appearance: ClipboardAppearancePreferences, shortcutSettings: ShortcutSettingsModel) {
+    init(
+        appearance: ClipboardAppearancePreferences,
+        shortcutSettings: ShortcutSettingsModel,
+        loginItemSettings: LoginItemSettings
+    ) {
         self.appearance = appearance
         self.shortcutSettings = shortcutSettings
+        self.loginItemSettings = loginItemSettings
     }
 
     func show() {
@@ -23,7 +29,11 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let view = SettingsView(appearance: appearance, shortcutSettings: shortcutSettings)
+        let view = SettingsView(
+            appearance: appearance,
+            shortcutSettings: shortcutSettings,
+            loginItemSettings: loginItemSettings
+        )
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)
         window.title = "iCopy 设置"
@@ -55,6 +65,7 @@ final class ShortcutSettingsModel: ObservableObject {
 }
 
 private enum SettingsSection: Hashable {
+    case general
     case appearance
     case shortcut
 }
@@ -62,7 +73,8 @@ private enum SettingsSection: Hashable {
 private struct SettingsView: View {
     @ObservedObject var appearance: ClipboardAppearancePreferences
     @ObservedObject var shortcutSettings: ShortcutSettingsModel
-    @State private var section: SettingsSection = .appearance
+    @ObservedObject var loginItemSettings: LoginItemSettings
+    @State private var section: SettingsSection = .general
 
     var body: some View {
         HStack(spacing: 0) {
@@ -70,6 +82,8 @@ private struct SettingsView: View {
             Divider()
             Group {
                 switch section {
+                case .general:
+                    GeneralSettingsView(settings: loginItemSettings)
                 case .appearance:
                     AppearanceSettingsView(appearance: appearance)
                 case .shortcut:
@@ -83,6 +97,7 @@ private struct SettingsView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 4) {
+            sidebarItem(.general, title: "通用", icon: "gearshape")
             sidebarItem(.appearance, title: "外观", icon: "paintbrush")
             sidebarItem(.shortcut, title: "呼出", icon: "keyboard")
             Spacer()
@@ -112,6 +127,49 @@ private struct SettingsView: View {
             .foregroundStyle(section == target ? Color.accentColor : .primary)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct GeneralSettingsView: View {
+    @ObservedObject var settings: LoginItemSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("通用")
+                .font(.headline)
+
+            Toggle(isOn: Binding(
+                get: { settings.isEnabled },
+                set: { settings.setEnabled($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("开机自启")
+                    Text("登录 macOS 后自动启动 iCopy。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+            .disabled(!settings.isAvailable)
+
+            if !settings.isAvailable {
+                Text("当前为开发运行模式，打包为 App 后可设置开机自启。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let errorMessage = settings.errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Spacer()
+        }
+        .padding(18)
+        .onAppear {
+            settings.refresh()
+        }
     }
 }
 

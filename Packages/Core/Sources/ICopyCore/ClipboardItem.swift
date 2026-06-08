@@ -29,6 +29,11 @@ public struct ClipboardItem: Identifiable, Codable, Equatable, Hashable, Sendabl
         return normalizedTitle?.isEmpty == false ? normalizedTitle! : preview
     }
 
+    public var hasCustomTitle: Bool {
+        let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedTitle?.isEmpty == false
+    }
+
     public var preview: String {
         content
             .replacingOccurrences(of: "\n", with: " ")
