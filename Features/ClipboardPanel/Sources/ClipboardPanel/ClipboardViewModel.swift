@@ -37,7 +37,7 @@ public final class ClipboardViewModel: ObservableObject {
     public var visibleItems: [ClipboardItem] {
         switch selectedScope {
         case .history:
-            collection.items
+            collection.history
         case .favorites:
             collection.favorites
         }

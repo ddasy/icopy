@@ -52,3 +52,15 @@ func renameWithTitleMarksItemAsFavorite() {
     #expect(collection.items[0].isFavorite)
     #expect(collection.favorites.map(\.id) == [id])
 }
+
+@Test
+func historyExcludesFavoriteItems() {
+    var collection = ClipboardCollection(maxHistoryCount: 10)
+    collection.record("favorite")
+    let favoriteID = collection.items[0].id
+    collection.toggleFavorite(id: favoriteID)
+    collection.record("history")
+
+    #expect(collection.history.map(\.content) == ["history"])
+    #expect(collection.favorites.map(\.content) == ["favorite"])
+}

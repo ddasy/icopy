@@ -13,6 +13,10 @@ public struct ClipboardCollection: Equatable, Sendable {
         items.filter(\.isFavorite)
     }
 
+    public var history: [ClipboardItem] {
+        items.filter { !$0.isFavorite }
+    }
+
     public mutating func record(_ content: String, now: Date = Date()) {
         let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return }

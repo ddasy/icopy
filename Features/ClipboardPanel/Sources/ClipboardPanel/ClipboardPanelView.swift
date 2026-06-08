@@ -6,6 +6,7 @@ public struct ClipboardPanelView: View {
     @StateObject private var viewModel: ClipboardViewModel
     @ObservedObject private var appearance: ClipboardAppearancePreferences
     @State private var itemBeingRenamed: RenameDraft?
+    @State private var itemPendingDeletion: ClipboardItem?
     private let openSettings: () -> Void
 
     public init(
@@ -42,6 +43,28 @@ public struct ClipboardPanelView: View {
         .padding(10)
         .background(Color.black.opacity(0.001))
         .frame(width: 440, height: 560)
+        .alert(
+            "删除收藏？",
+            isPresented: Binding(
+                get: { itemPendingDeletion != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        itemPendingDeletion = nil
+                    }
+                }
+            ),
+            presenting: itemPendingDeletion
+        ) { item in
+            Button("删除", role: .destructive) {
+                viewModel.remove(item)
+                itemPendingDeletion = nil
+            }
+            Button("取消", role: .cancel) {
+                itemPendingDeletion = nil
+            }
+        } message: { item in
+            Text("“\(item.displayTitle)”会从收藏中移除。")
+        }
     }
 
     private func header(solid: Bool) -> some View {
@@ -103,7 +126,7 @@ public struct ClipboardPanelView: View {
                                 onCopy: { viewModel.copy(item) },
                                 onRename: { itemBeingRenamed = RenameDraft(item: item) },
                                 onToggleFavorite: { viewModel.toggleFavorite(item) },
-                                onDelete: { viewModel.remove(item) }
+                                onDelete: { requestDelete(item) }
                             )
                             .background(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -140,6 +163,14 @@ public struct ClipboardPanelView: View {
             Text("复制文本后会显示在这里。")
                 .font(.caption)
                 .foregroundStyle(secondary)
+        }
+    }
+
+    private func requestDelete(_ item: ClipboardItem) {
+        if item.isFavorite {
+            itemPendingDeletion = item
+        } else {
+            viewModel.remove(item)
         }
     }
 
