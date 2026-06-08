@@ -47,6 +47,10 @@ public final class ClipboardViewModel: ObservableObject {
         pasteboardWriter.writeString(item.content)
     }
 
+    public func synchronizeClipboard() {
+        monitor.synchronize()
+    }
+
     public func toggleFavorite(_ item: ClipboardItem) {
         collection.toggleFavorite(id: item.id)
         persist()
@@ -68,7 +72,9 @@ public final class ClipboardViewModel: ObservableObject {
     }
 
     private func record(_ value: String) {
+        let previousItems = collection.items
         collection.record(value)
+        guard collection.items != previousItems else { return }
         persist()
     }
 

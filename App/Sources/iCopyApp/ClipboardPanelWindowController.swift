@@ -19,7 +19,7 @@ final class ClipboardPanelWindowController: NSObject, NSWindowDelegate {
     }
 
     func showOrToggle() {
-        if let window, window.isVisible, NSApp.isActive {
+        if let window, window.isVisible {
             window.orderOut(nil)
         } else {
             show()
@@ -29,6 +29,7 @@ final class ClipboardPanelWindowController: NSObject, NSWindowDelegate {
     func show() {
         let window = window ?? makeWindow()
         self.window = window
+        viewModel.synchronizeClipboard()
         if let savedFrame = Self.loadSavedFrame(), let screenFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame {
             window.setFrame(Self.constrain(savedFrame, to: screenFrame), display: false)
         } else {

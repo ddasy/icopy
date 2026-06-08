@@ -40,3 +40,15 @@ func renameStoresTrimmedTitle() {
     #expect(collection.items[0].title == "short title")
     #expect(collection.items[0].displayTitle == "short title")
 }
+
+@Test
+func renameWithTitleMarksItemAsFavorite() {
+    var collection = ClipboardCollection(maxHistoryCount: 10)
+    collection.record("long clipboard content")
+    let id = collection.items[0].id
+
+    collection.rename(id: id, title: "saved title")
+
+    #expect(collection.items[0].isFavorite)
+    #expect(collection.favorites.map(\.id) == [id])
+}

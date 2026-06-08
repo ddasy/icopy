@@ -5,7 +5,7 @@ import Testing
 @Test
 func monitorRecordsTextChangeWithoutKeyIntent() {
     let pasteboard = FakePasteboard()
-    let monitor = ClipboardMonitor(pasteboard: pasteboard)
+    let monitor = ClipboardMonitor(pasteboard: pasteboard, idleInterval: 30)
     var capturedValues: [String] = []
     monitor.onTextChange = { value in
         capturedValues.append(value)
@@ -21,7 +21,7 @@ func monitorRecordsTextChangeWithoutKeyIntent() {
 @Test
 func monitorIgnoresUnchangedPasteboard() {
     let pasteboard = FakePasteboard(initialString: "existing", initialChangeCount: 1)
-    let monitor = ClipboardMonitor(pasteboard: pasteboard)
+    let monitor = ClipboardMonitor(pasteboard: pasteboard, idleInterval: 30)
     var capturedValues: [String] = []
     monitor.onTextChange = { value in
         capturedValues.append(value)

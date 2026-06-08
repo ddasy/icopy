@@ -37,6 +37,9 @@ public struct ClipboardCollection: Equatable, Sendable {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         items[index].title = normalizedTitle?.isEmpty == false ? normalizedTitle : nil
+        if items[index].title != nil {
+            items[index].isFavorite = true
+        }
     }
 
     public mutating func remove(id: ClipboardItem.ID) {
