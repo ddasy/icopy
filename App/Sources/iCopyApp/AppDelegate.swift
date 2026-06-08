@@ -14,12 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private lazy var settingsController = SettingsWindowController(
         appearance: appearance,
-        shortcutSettings: shortcutSettings,
-        loginItemSettings: loginItemSettings
+        shortcutSettings: shortcutSettings
     )
     private let hotKeyRegistrar = GlobalHotKeyRegistrar()
     private let doubleCommandMonitor = DoubleCommandMonitor()
     private var shortcutPreference = ShortcutPreference.load()
+    private weak var launchAtLoginItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -68,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.delegate = self
 
         let showItem = NSMenuItem(title: "显示剪切板", action: #selector(showClipboardPanel), keyEquivalent: "")
         showItem.target = self
@@ -78,6 +79,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
         menu.addItem(settingsItem)
+
+        if loginItemSettings.isAvailable {
+            let launchItem = NSMenuItem(title: "开机自启", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+            launchItem.target = self
+            launchItem.image = NSImage(systemSymbolName: "power.circle", accessibilityDescription: nil)
+            launchItem.state = loginItemSettings.isEnabled ? .on : .off
+            menu.addItem(launchItem)
+            launchAtLoginItem = launchItem
+        }
 
         menu.addItem(.separator())
 
@@ -109,6 +119,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshShortcutMenu() {
         shortcutSettings.refresh(preference: shortcutPreference)
+    }
+
+    private func refreshLaunchAtLoginMenu() {
+        launchAtLoginItem?.state = loginItemSettings.isEnabled ? .on : .off
     }
 
     @objc
@@ -179,7 +193,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc
+    private func toggleLaunchAtLogin() {
+        loginItemSettings.setEnabled(!loginItemSettings.isEnabled)
+        refreshLaunchAtLoginMenu()
+        if let errorMessage = loginItemSettings.errorMessage {
+            let alert = NSAlert()
+            alert.icon = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
+            alert.messageText = errorMessage
+            alert.informativeText = "请确认 iCopy 是从打包后的 App 启动。"
+            alert.addButton(withTitle: "好")
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        }
+    }
+
+    @objc
     private func quit() {
         NSApp.terminate(nil)
+    }
+}
+
+extension AppDelegate: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshLaunchAtLoginMenu()
     }
 }

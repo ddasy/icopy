@@ -9,7 +9,8 @@ public struct ClipboardItemRow: View {
     private let onRename: () -> Void
     private let onToggleFavorite: () -> Void
     private let onDelete: () -> Void
-    @State private var isHovering = false
+    @State private var isHoverReady = false
+    @State private var hoverTask: Task<Void, Never>?
     @State private var availableTextWidth: CGFloat = 0
     @State private var collapsedTextWidth: CGFloat = 0
 
@@ -36,7 +37,10 @@ public struct ClipboardItemRow: View {
                 .padding(.horizontal, 10)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onCopy)
-                .onHover { isHovering = $0 }
+                .onHover(perform: updateHover)
+                .onDisappear {
+                    cancelHoverExpansion()
+                }
                 .animation(.easeInOut(duration: 0.12), value: isExpanded)
         }
     }
@@ -95,7 +99,27 @@ public struct ClipboardItemRow: View {
     }
 
     private var isExpanded: Bool {
-        isHovering && (item.hasCustomTitle || isCollapsedTextClipped)
+        isHoverReady && (item.hasCustomTitle || isCollapsedTextClipped)
+    }
+
+    private func updateHover(_ isHovering: Bool) {
+        hoverTask?.cancel()
+        guard isHovering else {
+            isHoverReady = false
+            return
+        }
+
+        hoverTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            isHoverReady = true
+        }
+    }
+
+    private func cancelHoverExpansion() {
+        hoverTask?.cancel()
+        hoverTask = nil
+        isHoverReady = false
     }
 
     private var isCollapsedTextClipped: Bool {

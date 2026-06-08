@@ -1,7 +1,7 @@
 应用入口与生命周期;AppKit 桥接和菜单栏常驻由这里编排。
 
 - `Sources/iCopyApp/main.swift` — AppKit 应用主循环入口。
-- `Sources/iCopyApp/AppDelegate.swift` — 创建菜单栏入口并编排快捷键、主面板和设置窗口。
+- `Sources/iCopyApp/AppDelegate.swift` — 创建菜单栏入口并编排快捷键、登录项、主面板和设置窗口。
 - `Sources/iCopyApp/KeyboardShortcut.swift` — 定义全局呼出快捷键和偏好存储。
 - `Sources/iCopyApp/LoginItemSettings.swift` — 管理 macOS 登录项开机自启状态。
 - `Sources/iCopyApp/GlobalHotKeyRegistrar.swift` — 注册 Carbon 全局快捷键。
