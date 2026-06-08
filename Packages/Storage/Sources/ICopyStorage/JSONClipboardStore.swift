@@ -10,7 +10,7 @@ public struct JSONClipboardStore: ClipboardStore {
         self.fileURL = fileURL
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
     }

@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import Foundation
 
 @MainActor
@@ -90,11 +89,15 @@ public final class ClipboardMonitor {
     }
 }
 
+/// 监听 Command 按下沿以触发加速采集。用 `.flagsChanged` 而非 `.keyDown`:
+/// 复制必然先按下 Command,而 `.flagsChanged` 只在修饰键变化时唤醒进程,
+/// 普通打字几乎零唤醒——避免逐键唤醒带来的功耗。
 @MainActor
 private final class CopyEventMonitor {
     private let onCopyEvent: () -> Void
     private var localMonitor: Any?
     private var globalMonitor: Any?
+    private var isCommandDown = false
 
     init(onCopyEvent: @escaping () -> Void) {
         self.onCopyEvent = onCopyEvent
@@ -103,12 +106,12 @@ private final class CopyEventMonitor {
     func start() {
         stop()
 
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             self?.handle(event)
             return event
         }
 
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             self?.handle(event)
         }
     }
@@ -123,15 +126,17 @@ private final class CopyEventMonitor {
             NSEvent.removeMonitor(globalMonitor)
             self.globalMonitor = nil
         }
+
+        isCommandDown = false
     }
 
     private func handle(_ event: NSEvent) {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard flags.contains(.command) else { return }
-        guard !flags.contains(.option), !flags.contains(.control) else { return }
+        let commandDown = event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .contains(.command)
 
-        if Int(event.keyCode) == kVK_ANSI_C || Int(event.keyCode) == kVK_ANSI_X {
-            onCopyEvent()
-        }
+        defer { isCommandDown = commandDown }
+        guard commandDown, !isCommandDown else { return }
+        onCopyEvent()
     }
 }
