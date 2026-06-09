@@ -11,6 +11,7 @@ let package = Package(
         .executable(name: "icopy", targets: ["iCopyApp"]),
         .library(name: "ICopyCore", targets: ["ICopyCore"]),
         .library(name: "ICopyClipboard", targets: ["ICopyClipboard"]),
+        .library(name: "ICopyTranslation", targets: ["ICopyTranslation"]),
         .library(name: "ICopyStorage", targets: ["ICopyStorage"]),
         .library(name: "ICopyUIComponents", targets: ["ICopyUIComponents"]),
         .library(name: "ClipboardPanel", targets: ["ClipboardPanel"]),
@@ -42,6 +43,18 @@ let package = Package(
             exclude: ["README.md"]
         ),
         .target(
+            name: "ICopyTranslation",
+            dependencies: ["ICopyCore"],
+            path: "Packages/Translation/Sources/ICopyTranslation",
+            exclude: ["README.md"]
+        ),
+        .testTarget(
+            name: "ICopyTranslationTests",
+            dependencies: ["ICopyTranslation"],
+            path: "Packages/Translation/Tests/ICopyTranslationTests",
+            exclude: ["README.md"]
+        ),
+        .target(
             name: "ICopyStorage",
             dependencies: ["ICopyCore"],
             path: "Packages/Storage/Sources/ICopyStorage",
@@ -67,7 +80,7 @@ let package = Package(
         ),
         .target(
             name: "DesktopCard",
-            dependencies: ["ICopyCore", "ICopyClipboard", "ICopyStorage", "ICopyUIComponents", "ClipboardPanel"],
+            dependencies: ["ICopyCore", "ICopyClipboard", "ICopyTranslation", "ICopyStorage", "ICopyUIComponents", "ClipboardPanel"],
             path: "Features/DesktopCard/Sources/DesktopCard",
             exclude: ["README.md"]
         ),
@@ -79,7 +92,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "iCopyApp",
-            dependencies: ["ClipboardPanel", "DesktopCard"],
+            dependencies: ["ClipboardPanel", "DesktopCard", "ICopyTranslation"],
             path: "App/Sources/iCopyApp",
             exclude: ["README.md", "DesktopCard/README.md"]
         )

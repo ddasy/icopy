@@ -58,7 +58,9 @@ public struct DesktopCardView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.card.isClipboard {
+        if viewModel.card.isTranslation {
+            TranslationCardView(viewModel: viewModel, appearance: appearance)
+        } else if viewModel.card.isClipboard {
             DesktopClipboardListView(viewModel: viewModel, appearance: appearance, onCopied: onCopied)
         } else {
             ManualSectionsView(

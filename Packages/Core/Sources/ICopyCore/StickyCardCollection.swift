@@ -13,7 +13,7 @@ public struct StickyCardCollection: Equatable, Sendable, Codable {
         cards.first { $0.id == id }
     }
 
-    /// 新建卡片并按内容模式建立不变量:manual → 一个空分区且无来源;clipboard → 无分区且带 .history 来源。
+    /// 新建卡片并按内容模式建立不变量:manual 有分区;clipboard 有来源;translation 有翻译状态。
     @discardableResult
     public mutating func newCard(
         mode: StickyCardContentMode,
@@ -37,6 +37,16 @@ public struct StickyCardCollection: Equatable, Sendable, Codable {
                 frame: frame,
                 sections: [],
                 clipboardSource: StickyCardClipboardSource(scope: .history),
+                createdAt: now,
+                updatedAt: now
+            )
+        case .translation:
+            card = StickyCardItem(
+                contentMode: .translation,
+                frame: frame,
+                sections: [],
+                clipboardSource: nil,
+                translation: StickyCardTranslation(),
                 createdAt: now,
                 updatedAt: now
             )

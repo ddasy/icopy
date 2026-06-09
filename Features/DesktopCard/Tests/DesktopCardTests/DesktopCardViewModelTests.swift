@@ -4,6 +4,7 @@ import Foundation
 import ICopyClipboard
 import ICopyCore
 import ICopyStorage
+import ICopyTranslation
 import Testing
 @testable import DesktopCard
 
@@ -17,6 +18,25 @@ private struct InMemoryClipboardStore: ClipboardStore {
     let items: [ClipboardItem]
     func load() throws -> [ClipboardItem] { items }
     func save(_ items: [ClipboardItem]) throws {}
+}
+
+private actor MockTranslationService: TranslationService {
+    var results: [String]
+    var error: Error?
+    private(set) var calls: [(text: String, target: TranslationLanguage)] = []
+
+    init(results: [String] = ["translated"], error: Error? = nil) {
+        self.results = results
+        self.error = error
+    }
+
+    func translate(_ text: String, to target: TranslationLanguage) async throws -> String {
+        calls.append((text, target))
+        if let error { throw error }
+        return results.isEmpty ? "" : results.removeFirst()
+    }
+
+    var callCount: Int { calls.count }
 }
 
 @MainActor
@@ -98,10 +118,83 @@ func setModeMaintainsInvariants() {
     vm.setMode(.clipboard)
     #expect(vm.card.sections.isEmpty)
     #expect(vm.card.clipboardSource != nil)
+    #expect(vm.card.translation == nil)
 
     vm.setMode(.manual)
     #expect(vm.card.sections.count == 1)
     #expect(vm.card.clipboardSource == nil)
+
+    vm.setMode(.translation)
+    #expect(vm.card.sections.isEmpty)
+    #expect(vm.card.clipboardSource == nil)
+    #expect(vm.card.translation != nil)
+}
+
+@MainActor
+@Test
+func translationDebounceUpdatesResult() async throws {
+    let translator = MockTranslationService(results: ["Hello"])
+    let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
+    let vm = DesktopCardViewModel(card: card, pasteboard: FakePasteboard(), translator: translator)
+
+    vm.setSourceText("你好")
+    try await Task.sleep(for: .milliseconds(850))
+
+    #expect(vm.translation?.translatedText == "Hello")
+    #expect(vm.translation?.status == .done)
+    let calls = await translator.calls
+    #expect(calls.count == 1)
+    #expect(calls.first?.text == "你好")
+    #expect(calls.first?.target == .english)
+}
+
+@MainActor
+@Test
+func translationDebounceUsesOnlyFinalEdit() async throws {
+    let translator = MockTranslationService(results: ["Bonjour"])
+    let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
+    let vm = DesktopCardViewModel(card: card, pasteboard: FakePasteboard(), translator: translator)
+
+    vm.setSourceText("h")
+    try await Task.sleep(for: .milliseconds(100))
+    vm.setSourceText("hello")
+    try await Task.sleep(for: .milliseconds(850))
+
+    #expect(vm.translation?.translatedText == "Bonjour")
+    #expect(await translator.callCount == 1)
+    #expect(await translator.calls.first?.text == "hello")
+}
+
+@MainActor
+@Test
+func translationFailureUpdatesStatus() async throws {
+    let translator = MockTranslationService(error: TranslationError.malformedResponse)
+    let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
+    let vm = DesktopCardViewModel(card: card, pasteboard: FakePasteboard(), translator: translator)
+
+    vm.setSourceText("hello")
+    try await Task.sleep(for: .milliseconds(850))
+
+    guard case .failed(let message) = vm.translation?.status else {
+        Issue.record("translation status did not fail")
+        return
+    }
+    #expect(message == "LM Studio 响应格式不正确")
+}
+
+@MainActor
+@Test
+func translationSkipsSameSourceAfterSuccess() async throws {
+    let translator = MockTranslationService(results: ["Hello"])
+    let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
+    let vm = DesktopCardViewModel(card: card, pasteboard: FakePasteboard(), translator: translator)
+
+    vm.setSourceText("你好")
+    try await Task.sleep(for: .milliseconds(850))
+    vm.setSourceText("你好")
+    try await Task.sleep(for: .milliseconds(850))
+
+    #expect(await translator.callCount == 1)
 }
 
 @Test

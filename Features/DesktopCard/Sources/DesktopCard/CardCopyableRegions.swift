@@ -8,6 +8,7 @@ public struct CardCopyableRegion: Equatable, Sendable {
     public enum Payload: Equatable, Sendable {
         case section(StickyCardSection.ID)   // 手动卡片分区
         case clipboardItem(ClipboardItem.ID) // 剪贴板卡片行
+        case translation                     // 翻译卡片译文区
     }
 
     public let payload: Payload

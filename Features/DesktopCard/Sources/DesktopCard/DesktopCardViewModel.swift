@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import ICopyClipboard
 import ICopyCore
+import ICopyTranslation
 import SwiftUI
 import ClipboardPanel
 
@@ -13,22 +14,33 @@ public final class DesktopCardViewModel: ObservableObject {
 
     /// 仅 .clipboard 卡片非 nil;全应用共享一个,避免重复监听/重复记录。
     public let clipboard: ClipboardViewModel?
+    public var translation: StickyCardTranslation? { card.translation }
 
     private let pasteboard: PasteboardWriting
+    private let translator: TranslationService?
     private let onPersist: (StickyCardItem) -> Void
     private var persistTask: Task<Void, Never>?
+    private var translateTask: Task<Void, Never>?
+    private var lastTranslatedSource: String = ""
     private var clipboardObservation: AnyCancellable?
 
     public init(
         card: StickyCardItem,
         pasteboard: PasteboardWriting = SystemPasteboardClient(),
         clipboard: ClipboardViewModel? = nil,
+        translator: TranslationService? = nil,
         onPersist: @escaping (StickyCardItem) -> Void = { _ in }
     ) {
         self.card = card
         self.pasteboard = pasteboard
         self.clipboard = clipboard
+        self.translator = translator
         self.onPersist = onPersist
+        if let translation = card.translation,
+           translation.status == .done,
+           !translation.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self.lastTranslatedSource = translation.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
         // 剪贴板模式:共享集合变化时转发,使桌面列表(及锁定态可复制区域)实时刷新。
         if let clipboard {
@@ -36,6 +48,7 @@ public final class DesktopCardViewModel: ObservableObject {
                 self?.objectWillChange.send()
             }
         }
+        scheduleTranslate()
     }
 
     public var id: StickyCardItem.ID { card.id }
@@ -84,6 +97,30 @@ public final class DesktopCardViewModel: ObservableObject {
         return true
     }
 
+    // MARK: - 翻译模式
+
+    public func setSourceText(_ text: String) {
+        guard card.translation != nil else { return }
+        card.translation?.sourceText = text
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            translateTask?.cancel()
+            card.translation?.translatedText = ""
+            card.translation?.status = .idle
+            lastTranslatedSource = ""
+        }
+        persistSoon()
+        scheduleTranslate()
+    }
+
+    @discardableResult
+    public func copyTranslation() -> Bool {
+        guard let text = card.translation?.translatedText.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return false }
+        pasteboard.writeString(text)
+        return true
+    }
+
     // MARK: - 状态
 
     public func toggleLock() {
@@ -96,13 +133,23 @@ public final class DesktopCardViewModel: ObservableObject {
     public func setMode(_ mode: StickyCardContentMode) {
         guard mode != card.contentMode else { return }
         card.contentMode = mode
-        // 维持不变量:manual 至少一个分区;clipboard 无分区且带来源。
-        if mode == .manual {
+        // 维持不变量:manual 至少一个分区;clipboard 无分区且带来源;translation 有翻译状态。
+        switch mode {
+        case .manual:
             if card.sections.isEmpty { card.sections = [StickyCardSection()] }
             card.clipboardSource = nil
-        } else {
+            card.translation = nil
+            translateTask?.cancel()
+        case .clipboard:
             card.sections = []
             if card.clipboardSource == nil { card.clipboardSource = StickyCardClipboardSource(scope: .history) }
+            card.translation = nil
+            translateTask?.cancel()
+        case .translation:
+            card.sections = []
+            card.clipboardSource = nil
+            if card.translation == nil { card.translation = StickyCardTranslation() }
+            scheduleTranslate()
         }
         persistNow()
     }
@@ -141,5 +188,47 @@ public final class DesktopCardViewModel: ObservableObject {
         persistTask?.cancel()
         persistTask = nil
         onPersist(card)
+    }
+
+    private func scheduleTranslate() {
+        translateTask?.cancel()
+        guard let translator, let translation = card.translation else { return }
+        let source = translation.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty, source != lastTranslatedSource else { return }
+        translateTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            await self.runTranslation(source: source, translator: translator)
+        }
+    }
+
+    private func runTranslation(source: String, translator: TranslationService) async {
+        let target = StickyCardItem.detectTarget(for: source)
+        card.translation?.status = .translating
+        objectWillChange.send()
+        do {
+            let result = try await translator.translate(source, to: target)
+            guard !Task.isCancelled else { return }
+            card.translation?.translatedText = result
+            card.translation?.status = .done
+            lastTranslatedSource = source
+        } catch {
+            guard !Task.isCancelled else { return }
+            card.translation?.status = .failed(Self.message(for: error))
+        }
+        objectWillChange.send()
+        persistNow()
+    }
+
+    private static func message(for error: Error) -> String {
+        if let translationError = error as? TranslationError {
+            switch translationError {
+            case .emptyInput: return "请输入要翻译的内容"
+            case .server(let status, let body): return "LM Studio 返回 \(status): \(body)"
+            case .malformedResponse: return "LM Studio 响应格式不正确"
+            case .transport(let message): return "连接失败: \(message)"
+            }
+        }
+        return error.localizedDescription
     }
 }

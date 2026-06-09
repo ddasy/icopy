@@ -3,6 +3,7 @@ import ClipboardPanel
 import DesktopCard
 import ICopyCore
 import ICopyStorage
+import ICopyTranslation
 
 /// 桌面卡片的拥有者:持有卡片集合与存储,创建/关闭/恢复每张卡片的窗口控制器,
 /// 共享同一个 ClipboardViewModel(剪贴板卡片的数据源)与同一个"已复制"提示。集合保存去抖。
@@ -11,12 +12,18 @@ final class DesktopCardManager {
     private var collection: StickyCardCollection
     private let store: StickyCardStore
     private let clipboard: ClipboardViewModel
+    private let translationPreferences: TranslationPreferences
     private let toast = CopiedToastController()
     private var controllers: [StickyCardItem.ID: DesktopCardWindowController] = [:]
     private var saveTask: Task<Void, Never>?
 
-    init(clipboard: ClipboardViewModel, store: StickyCardStore = JSONStickyCardStore()) {
+    init(
+        clipboard: ClipboardViewModel,
+        translationPreferences: TranslationPreferences,
+        store: StickyCardStore = JSONStickyCardStore()
+    ) {
         self.clipboard = clipboard
+        self.translationPreferences = translationPreferences
         self.store = store
         if let cards = try? store.load() {
             self.collection = StickyCardCollection(cards: cards)
@@ -56,6 +63,7 @@ final class DesktopCardManager {
         let viewModel = DesktopCardViewModel(
             card: card,
             clipboard: card.isClipboard ? clipboard : nil,
+            translator: LMStudioTranslationService(config: translationPreferences.config),
             onPersist: { [weak self] updated in self?.persist(updated) }
         )
         let controller = DesktopCardWindowController(

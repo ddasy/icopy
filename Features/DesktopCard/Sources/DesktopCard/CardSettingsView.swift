@@ -63,10 +63,11 @@ public struct CardSettingsView: View {
             Picker("", selection: Binding(get: { contentMode }, set: { onChangeMode($0) })) {
                 Text("手动").tag(StickyCardContentMode.manual)
                 Text("剪贴板").tag(StickyCardContentMode.clipboard)
+                Text("翻译").tag(StickyCardContentMode.translation)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 150)
+            .frame(width: 210)
         }
     }
 

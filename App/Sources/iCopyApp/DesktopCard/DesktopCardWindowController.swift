@@ -142,6 +142,8 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
             copied = viewModel.copySection(id: sectionID)
         case .clipboardItem(let itemID):
             copied = viewModel.copyItem(id: itemID)
+        case .translation:
+            copied = viewModel.copyTranslation()
         }
         if copied { toast.flash(at: screenPoint) }
     }

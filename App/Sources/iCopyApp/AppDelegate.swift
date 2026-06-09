@@ -6,6 +6,7 @@ import ClipboardPanel
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let appearance = ClipboardAppearancePreferences()
+    private let translationPreferences = TranslationPreferences()
     private let loginItemSettings = LoginItemSettings()
     /// 全应用共享一个剪贴板视图模型:面板与剪贴板卡片同源,避免重复监听/重复记录。
     private let clipboardViewModel = ClipboardViewModel()
@@ -15,9 +16,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appearance: appearance,
         openSettings: { [weak self] in self?.showSettingsWindow() }
     )
-    private lazy var desktopCardManager = DesktopCardManager(clipboard: clipboardViewModel)
+    private lazy var desktopCardManager = DesktopCardManager(
+        clipboard: clipboardViewModel,
+        translationPreferences: translationPreferences
+    )
     private lazy var settingsController = SettingsWindowController(
         appearance: appearance,
+        translationPreferences: translationPreferences,
         shortcutSettings: shortcutSettings
     )
     private let hotKeyRegistrar = GlobalHotKeyRegistrar()

@@ -4,6 +4,7 @@ import Foundation
 public enum StickyCardContentMode: String, Codable, Equatable, Hashable, Sendable, CaseIterable {
     case manual      // 手动便签:分隔符切分的独立分区
     case clipboard   // 桌面化的剪贴板历史只读视图
+    case translation // 原文→译文的自动翻译卡片
 }
 
 public enum StickyCardLockState: String, Codable, Equatable, Hashable, Sendable {
@@ -62,6 +63,30 @@ public struct StickyCardClipboardSource: Codable, Equatable, Hashable, Sendable 
     }
 }
 
+public enum TranslationLanguage: String, Codable, Equatable, Hashable, Sendable {
+    case english
+    case chinese
+}
+
+public enum TranslationStatus: Codable, Equatable, Hashable, Sendable {
+    case idle
+    case translating
+    case done
+    case failed(String)
+}
+
+public struct StickyCardTranslation: Codable, Equatable, Hashable, Sendable {
+    public var sourceText: String
+    public var translatedText: String
+    public var status: TranslationStatus
+
+    public init(sourceText: String = "", translatedText: String = "", status: TranslationStatus = .idle) {
+        self.sourceText = sourceText
+        self.translatedText = translatedText
+        self.status = status
+    }
+}
+
 public struct StickyCardItem: Identifiable, Codable, Equatable, Hashable, Sendable {
     public let id: UUID
     public var contentMode: StickyCardContentMode
@@ -70,6 +95,7 @@ public struct StickyCardItem: Identifiable, Codable, Equatable, Hashable, Sendab
     public var appearance: StickyCardAppearance
     public var sections: [StickyCardSection]                 // 仅 manual;clipboard 为空
     public var clipboardSource: StickyCardClipboardSource?   // 仅 clipboard;manual 为 nil
+    public var translation: StickyCardTranslation?           // 仅 translation 非 nil
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -81,6 +107,7 @@ public struct StickyCardItem: Identifiable, Codable, Equatable, Hashable, Sendab
         appearance: StickyCardAppearance = .default,
         sections: [StickyCardSection] = [StickyCardSection()],
         clipboardSource: StickyCardClipboardSource? = nil,
+        translation: StickyCardTranslation? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -91,6 +118,7 @@ public struct StickyCardItem: Identifiable, Codable, Equatable, Hashable, Sendab
         self.appearance = appearance
         self.sections = sections
         self.clipboardSource = clipboardSource
+        self.translation = translation
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -104,6 +132,14 @@ public struct StickyCardItem: Identifiable, Codable, Equatable, Hashable, Sendab
     public var isLocked: Bool { lockState.isLocked }
     public var isManual: Bool { contentMode == .manual }
     public var isClipboard: Bool { contentMode == .clipboard }
+    public var isTranslation: Bool { contentMode == .translation }
+
+    public static func detectTarget(for text: String) -> TranslationLanguage {
+        let cjk = text.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
+        let letters = text.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+        let total = max(letters, 1)
+        return Double(cjk) / Double(total) >= 0.3 ? .english : .chinese
+    }
 
     // MARK: - 手动内容业务规则(留在 Core,不下放到视图)
 

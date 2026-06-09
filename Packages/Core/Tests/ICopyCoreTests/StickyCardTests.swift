@@ -87,6 +87,18 @@ func newClipboardCardHasNoSectionsAndHistorySource() {
     #expect(card.isClipboard)
     #expect(card.sections.isEmpty)
     #expect(card.clipboardSource?.scope == .history)
+    #expect(card.translation == nil)
+}
+
+@Test
+func newTranslationCardHasTranslationStateOnly() {
+    var collection = StickyCardCollection()
+    let card = collection.newCard(mode: .translation)
+
+    #expect(card.isTranslation)
+    #expect(card.sections.isEmpty)
+    #expect(card.clipboardSource == nil)
+    #expect(card.translation == StickyCardTranslation())
 }
 
 @Test
@@ -150,6 +162,33 @@ func cardCodableRoundTripPreservesFrameAndContent() throws {
 
     #expect(decoded == original)
     #expect(decoded.frame == original.frame)
+}
+
+@Test
+func cardDecodesStoredJSONWithoutTranslationField() throws {
+    let original = StickyCardItem(createdAt: Date(timeIntervalSince1970: 1000), updatedAt: Date(timeIntervalSince1970: 1000))
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let data = try encoder.encode(original)
+    var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    object.removeValue(forKey: "translation")
+    let legacyData = try JSONSerialization.data(withJSONObject: object)
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let decoded = try decoder.decode(StickyCardItem.self, from: legacyData)
+
+    #expect(decoded.translation == nil)
+}
+
+@Test
+func detectTranslationTargetUsesCJKRatio() {
+    #expect(StickyCardItem.detectTarget(for: "你好世界") == .english)
+    #expect(StickyCardItem.detectTarget(for: "Hello world") == .chinese)
+    #expect(StickyCardItem.detectTarget(for: "你好 abc") == .english)
+    #expect(StickyCardItem.detectTarget(for: "hello 你") == .chinese)
+    #expect(StickyCardItem.detectTarget(for: "12345!?") == .chinese)
+    #expect(StickyCardItem.detectTarget(for: "") == .chinese)
 }
 
 @Test
