@@ -134,8 +134,9 @@ func setModeMaintainsInvariants() {
 @Test
 func translationDebounceUpdatesResult() async throws {
     let translator = MockTranslationService(results: ["Hello"])
+    let pasteboard = FakePasteboard()
     let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
-    let vm = DesktopCardViewModel(card: card, pasteboard: FakePasteboard(), translator: translator)
+    let vm = DesktopCardViewModel(card: card, pasteboard: pasteboard, translator: translator)
 
     vm.setSourceText("你好")
     try await Task.sleep(for: .milliseconds(850))
@@ -146,14 +147,16 @@ func translationDebounceUpdatesResult() async throws {
     #expect(calls.count == 1)
     #expect(calls.first?.text == "你好")
     #expect(calls.first?.target == .english)
+    #expect(pasteboard.written == ["你好"])
 }
 
 @MainActor
 @Test
 func translationDebounceUsesOnlyFinalEdit() async throws {
     let translator = MockTranslationService(results: ["Bonjour"])
+    let pasteboard = FakePasteboard()
     let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
-    let vm = DesktopCardViewModel(card: card, pasteboard: FakePasteboard(), translator: translator)
+    let vm = DesktopCardViewModel(card: card, pasteboard: pasteboard, translator: translator)
 
     vm.setSourceText("h")
     try await Task.sleep(for: .milliseconds(100))
@@ -163,14 +166,16 @@ func translationDebounceUsesOnlyFinalEdit() async throws {
     #expect(vm.translation?.translatedText == "Bonjour")
     #expect(await translator.callCount == 1)
     #expect(await translator.calls.first?.text == "hello")
+    #expect(pasteboard.written == ["hello"])
 }
 
 @MainActor
 @Test
 func translationFailureUpdatesStatus() async throws {
     let translator = MockTranslationService(error: TranslationError.malformedResponse)
+    let pasteboard = FakePasteboard()
     let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
-    let vm = DesktopCardViewModel(card: card, pasteboard: FakePasteboard(), translator: translator)
+    let vm = DesktopCardViewModel(card: card, pasteboard: pasteboard, translator: translator)
 
     vm.setSourceText("hello")
     try await Task.sleep(for: .milliseconds(850))
@@ -180,6 +185,7 @@ func translationFailureUpdatesStatus() async throws {
         return
     }
     #expect(message == "LM Studio 响应格式不正确")
+    #expect(pasteboard.written.isEmpty)
 }
 
 @MainActor

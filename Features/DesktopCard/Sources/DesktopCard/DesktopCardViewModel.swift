@@ -212,6 +212,7 @@ public final class DesktopCardViewModel: ObservableObject {
             card.translation?.translatedText = result
             card.translation?.status = .done
             lastTranslatedSource = source
+            pasteboard.writeString(source)
         } catch {
             guard !Task.isCancelled else { return }
             card.translation?.status = .failed(Self.message(for: error))
