@@ -3,7 +3,7 @@ import DesktopCard
 import SwiftUI
 
 /// 单卡片的锁定态覆盖子系统:卡片沉入桌面层后收不到任何鼠标事件(Finder 桌面窗口拦截),
-/// 本控制器用一组独立可点击层窗口把交互还给用户——快捷条(解锁/设置/关闭)、每个可复制
+/// 本控制器用一组独立可点击层窗口把交互还给用户——镜像头部快捷条、每个可复制
 /// 区域的单击复制热区、以及滚轮转发。
 ///
 /// 与 FeedBar 的关键差异:FeedBar 假设只有一张常驻卡片,事件监视器从不移除;本应用多卡片
@@ -12,6 +12,7 @@ import SwiftUI
 final class LockOverlayController {
     private let panel: DesktopCardPanel
     private let onUnlock: () -> Void
+    private let onInsertDivider: () -> Void
     private let onOpenSettings: () -> Void
     private let onClose: () -> Void
     /// 单击某复制区域时回调(payload + 屏幕点,后者用于在点击处弹"已复制")。
@@ -22,15 +23,26 @@ final class LockOverlayController {
     private var copyZonePanels: [DesktopCardPanel] = []
     private var regions: [CardCopyableRegion] = []
     private var isLocked = false
+    private var includesDividerButton = true
     private var copyZoneMonitorInstalled = false
 
     private var monitorTokens: [Any] = []
 
-    private let stripSize = NSSize(width: 96, height: 32)
+    private let cardOuterPadding: CGFloat = 10
+    private let toolbarHeight: CGFloat = 32
+    private let toolbarEdgeHitWidth: CGFloat = 36
+    private let toolbarSecondaryHitWidth: CGFloat = 28
+    private var copyZoneLevel: NSWindow.Level {
+        NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)))
+    }
+    private var stripLevel: NSWindow.Level {
+        NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+    }
 
     init(
         panel: DesktopCardPanel,
         onUnlock: @escaping () -> Void,
+        onInsertDivider: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onClose: @escaping () -> Void,
         onCopy: @escaping (CardCopyableRegion.Payload, NSPoint) -> Void,
@@ -38,6 +50,7 @@ final class LockOverlayController {
     ) {
         self.panel = panel
         self.onUnlock = onUnlock
+        self.onInsertDivider = onInsertDivider
         self.onOpenSettings = onOpenSettings
         self.onClose = onClose
         self.onCopy = onCopy
@@ -59,6 +72,16 @@ final class LockOverlayController {
     func updateRegions(_ regions: [CardCopyableRegion]) {
         self.regions = regions
         if isLocked { layoutCopyZones() }
+    }
+
+    func updateToolbar(includesDividerButton: Bool) {
+        guard self.includesDividerButton != includesDividerButton else { return }
+        self.includesDividerButton = includesDividerButton
+        if let stripPanel {
+            stripPanel.contentView = FirstMouseHostingView(
+                rootView: LockControlToolbarView(includesDividerButton: includesDividerButton)
+            )
+        }
     }
 
     /// 卡片被移动/缩放后重摆覆盖窗口。
@@ -84,8 +107,8 @@ final class LockOverlayController {
         let strip = ensureStripPanel()
         positionStrip(strip)
         guard panel.isVisible else { return }
-        strip.orderFront(nil)
         layoutCopyZones()
+        strip.orderFront(nil)
     }
 
     private func hideOverlays() {
@@ -103,7 +126,7 @@ final class LockOverlayController {
         )
         overlay.isResizingEnabled = false
         overlay.isFloatingPanel = false
-        overlay.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)))
+        overlay.level = copyZoneLevel
         overlay.backgroundColor = .clear
         overlay.isOpaque = false
         overlay.hasShadow = false
@@ -113,12 +136,15 @@ final class LockOverlayController {
         return overlay
     }
 
-    // MARK: - 快捷条(解锁 / 设置 / 关闭)
+    // MARK: - 快捷条(锁定 / 分割 / 设置 / 关闭)
 
     private func ensureStripPanel() -> DesktopCardPanel {
         if let stripPanel { return stripPanel }
-        let strip = makeOverlayPanel(size: stripSize)
-        strip.contentView = FirstMouseHostingView(rootView: LockControlStripView())
+        let strip = makeOverlayPanel(size: NSSize(width: 10, height: toolbarHeight))
+        strip.level = stripLevel
+        strip.contentView = FirstMouseHostingView(
+            rootView: LockControlToolbarView(includesDividerButton: includesDividerButton)
+        )
         // 同 FeedBar:此类面板上 SwiftUI Button 手势不可靠,改用事件监视器按 x 区间手动分派。
         let token = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp]) { [weak self, weak strip] event in
             guard let self, let strip, event.window === strip else { return event }
@@ -130,23 +156,36 @@ final class LockOverlayController {
         return strip
     }
 
-    /// 96pt 宽,3 个图标,中心约在 x = 24 / 48 / 72(解锁/设置/关闭),边界取中点。
+    /// 命中区与解锁态 header 的视觉布局一致:左侧锁定/分割,右侧设置/关闭。
     private func handleStripClick(at point: NSPoint) {
-        guard point.y >= 2, point.y <= stripSize.height - 2 else { return }
-        switch point.x {
-        case ..<36: onUnlock()
-        case ..<60: onOpenSettings()
-        default: onClose()
+        guard point.y >= 0, point.y <= toolbarHeight,
+              let stripPanel else { return }
+        let width = stripPanel.frame.width
+        if point.x < toolbarEdgeHitWidth {
+            onUnlock()
+        } else if includesDividerButton, point.x < toolbarEdgeHitWidth + toolbarSecondaryHitWidth {
+            onInsertDivider()
+        } else if point.x >= width - toolbarEdgeHitWidth {
+            onClose()
+        } else if point.x >= width - toolbarEdgeHitWidth - toolbarSecondaryHitWidth {
+            onOpenSettings()
         }
     }
 
-    /// 快捷条置于卡片右上角内侧(对齐解锁态 header 按钮组的大致位置)。
+    /// 快捷条覆盖可见卡片顶部 header 区,视觉上与解锁态 header 的按钮位置一致。
     private func positionStrip(_ strip: NSPanel) {
-        let card = panel.frame
-        strip.setFrameOrigin(NSPoint(
-            x: card.maxX - stripSize.width - 14,
-            y: card.maxY - stripSize.height - 14
-        ))
+        let card = visibleCardFrame
+        strip.setFrame(NSRect(
+            x: card.minX,
+            y: card.maxY - toolbarHeight,
+            width: card.width,
+            height: toolbarHeight
+        ), display: true)
+    }
+
+    /// 面板外框包含 SwiftUI 透明缩放边距;覆盖层应对齐可见圆角卡片而非窗口外框。
+    private var visibleCardFrame: NSRect {
+        panel.frame.insetBy(dx: cardOuterPadding, dy: cardOuterPadding)
     }
 
     // MARK: - 复制热区
@@ -261,27 +300,30 @@ final class LockOverlayController {
     }
 }
 
-/// 锁定快捷条内容:解锁 / 设置 / 关闭(点击分派在控制器,不依赖这些 Button 的手势)。
-private struct LockControlStripView: View {
+/// 锁定快捷条内容:锁定态仍镜像解锁态 header 布局(点击分派在控制器,不依赖这些 Button 的手势)。
+private struct LockControlToolbarView: View {
+    let includesDividerButton: Bool
+
     var body: some View {
-        HStack(spacing: 8) {
-            icon("lock.open")
+        HStack(spacing: 12) {
+            icon("lock")
+            if includesDividerButton {
+                icon("text.insert")
+            }
+            Spacer()
             icon("gearshape")
             icon("xmark")
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            Capsule().fill(.ultraThinMaterial)
-        )
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.16)))
+        .background(Color.white.opacity(0.001))
     }
 
     private func icon(_ name: String) -> some View {
         Image(systemName: name)
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(.secondary)
-            .frame(width: 16, height: 16)
     }
 }
 

@@ -1,7 +1,7 @@
 DesktopCard 功能模块:桌面便签卡片的视图编排(手动/剪贴板两种内容、分区分割、锁定态可复制区域上报)。
 
 - `DesktopCardViewModel.swift` — 单卡片编排:绑定 StickyCardItem、应用外观、转发分区/复制、去抖持久化。
-- `DesktopCardView.swift` — 卡片顶层视图:头部工具栏(锁定/分割/设置/关闭)+ 内容;锁定态隐藏头部。
+- `DesktopCardView.swift` — 卡片顶层视图:头部工具栏(锁定/分割/设置/关闭)+ 内容;锁定态保留头部布局。
 - `ManualSectionsView.swift` — 手动内容:可编辑分区(SectionTextView 上报焦点+光标)/ 锁定态只读分区上报可复制区域。
 - `DesktopClipboardListView.swift` — 剪贴板卡片的桌面历史只读列表(紧凑行,上报可复制区域)。
 - `CardSettingsView.swift` — 单卡片设置面板:模式、透明度、字体、颜色预设盘+强度。

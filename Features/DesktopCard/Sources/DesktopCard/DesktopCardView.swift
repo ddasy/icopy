@@ -1,8 +1,8 @@
 import ICopyCore
 import SwiftUI
 
-/// 单张桌面卡片的顶层视图(编排:头部工具栏 + 内容)。解锁态显示头部按钮(锁定/分割/设置/关闭);
-/// 锁定态隐藏头部(卡片嵌入桌面不可交互,这些操作由 App 层覆盖层控制条提供),内容上报可复制区域。
+/// 单张桌面卡片的顶层视图(编排:头部工具栏 + 内容)。锁定态保留头部布局但交互由 App 层覆盖层接管,
+/// 内容上报可复制区域。
 public struct DesktopCardView: View {
     @StateObject private var viewModel: DesktopCardViewModel
     private let onOpenSettings: () -> Void
@@ -31,12 +31,11 @@ public struct DesktopCardView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            if !viewModel.card.isLocked {
-                header
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                Divider().opacity(0.4)
-            }
+            header
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .opacity(viewModel.card.isLocked ? 0 : 1)
+            Divider().opacity(0.4)
             content
         }
         .background(
@@ -74,10 +73,10 @@ public struct DesktopCardView: View {
     private var header: some View {
         HStack(spacing: 12) {
             Button(action: viewModel.toggleLock) {
-                Image(systemName: "lock.open")
+                Image(systemName: viewModel.card.isLocked ? "lock" : "lock.open")
             }
             .buttonStyle(.plain)
-            .help("锁定卡片")
+            .help(viewModel.card.isLocked ? "解锁卡片" : "锁定卡片")
 
             if viewModel.card.isManual {
                 Button(action: insertDivider) {

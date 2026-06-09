@@ -99,6 +99,7 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
         overlay = LockOverlayController(
             panel: panel,
             onUnlock: { [weak self] in self?.viewModel.toggleLock() },
+            onInsertDivider: { [weak self] in self?.insertDividerFromToolbar() },
             onOpenSettings: { [weak self] in self?.showSettings() },
             onClose: { [weak self] in self?.requestClose() },
             onCopy: { [weak self] payload, screenPoint in self?.performCopy(payload, at: screenPoint) },
@@ -116,6 +117,7 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
     private func applyState(_ card: StickyCardItem, force: Bool) {
         guard let panel else { return }
         let locked = card.isLocked
+        overlay?.updateToolbar(includesDividerButton: card.isManual)
         guard force || locked != lastLocked else { return }
         lastLocked = locked
 
@@ -146,6 +148,12 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
 
     private func requestClose() {
         onCloseRequested(id)
+    }
+
+    private func insertDividerFromToolbar() {
+        guard viewModel.card.isManual,
+              let section = viewModel.sections.last else { return }
+        _ = viewModel.insertDivider(inSectionID: section.id, atGraphemeOffset: section.text.count)
     }
 
     /// 新建/呼出手动卡片时自动聚焦首个文本框,便于立即输入。
