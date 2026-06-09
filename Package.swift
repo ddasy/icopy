@@ -13,7 +13,8 @@ let package = Package(
         .library(name: "ICopyClipboard", targets: ["ICopyClipboard"]),
         .library(name: "ICopyStorage", targets: ["ICopyStorage"]),
         .library(name: "ICopyUIComponents", targets: ["ICopyUIComponents"]),
-        .library(name: "ClipboardPanel", targets: ["ClipboardPanel"])
+        .library(name: "ClipboardPanel", targets: ["ClipboardPanel"]),
+        .library(name: "DesktopCard", targets: ["DesktopCard"])
     ],
     dependencies: [],
     targets: [
@@ -64,11 +65,22 @@ let package = Package(
             path: "Features/ClipboardPanel/Sources/ClipboardPanel",
             exclude: ["README.md"]
         ),
+        .target(
+            name: "DesktopCard",
+            dependencies: ["ICopyCore", "ICopyClipboard", "ICopyStorage", "ICopyUIComponents", "ClipboardPanel"],
+            path: "Features/DesktopCard/Sources/DesktopCard",
+            exclude: ["README.md"]
+        ),
+        .testTarget(
+            name: "DesktopCardTests",
+            dependencies: ["DesktopCard"],
+            path: "Features/DesktopCard/Tests/DesktopCardTests"
+        ),
         .executableTarget(
             name: "iCopyApp",
-            dependencies: ["ClipboardPanel"],
+            dependencies: ["ClipboardPanel", "DesktopCard"],
             path: "App/Sources/iCopyApp",
-            exclude: ["README.md"]
+            exclude: ["README.md", "DesktopCard/README.md"]
         )
     ]
 )

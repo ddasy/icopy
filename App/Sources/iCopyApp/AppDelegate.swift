@@ -7,11 +7,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let appearance = ClipboardAppearancePreferences()
     private let loginItemSettings = LoginItemSettings()
+    /// 全应用共享一个剪贴板视图模型:面板与剪贴板卡片同源,避免重复监听/重复记录。
+    private let clipboardViewModel = ClipboardViewModel()
     private lazy var shortcutSettings = ShortcutSettingsModel(preference: shortcutPreference)
     private lazy var panelController = ClipboardPanelWindowController(
+        viewModel: clipboardViewModel,
         appearance: appearance,
         openSettings: { [weak self] in self?.showSettingsWindow() }
     )
+    private lazy var desktopCardManager = DesktopCardManager(clipboard: clipboardViewModel)
     private lazy var settingsController = SettingsWindowController(
         appearance: appearance,
         shortcutSettings: shortcutSettings
@@ -28,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureMainMenu()
         configureStatusItem()
         applyShortcutPreference()
+        desktopCardManager.restorePersistedCards()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -74,6 +79,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showItem.target = self
         showItem.image = NSImage(systemSymbolName: "rectangle.on.rectangle", accessibilityDescription: nil)
         menu.addItem(showItem)
+
+        let newCardItem = NSMenuItem(title: "新建桌面卡片", action: #selector(newDesktopCard), keyEquivalent: "")
+        newCardItem.target = self
+        newCardItem.image = NSImage(systemSymbolName: "note.text.badge.plus", accessibilityDescription: nil)
+        menu.addItem(newCardItem)
 
         let settingsItem = NSMenuItem(title: "打开设置…", action: #selector(showSettingsWindow), keyEquivalent: ",")
         settingsItem.target = self
@@ -133,6 +143,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc
     private func showSettingsWindow() {
         settingsController.show()
+    }
+
+    @objc
+    private func newDesktopCard() {
+        desktopCardManager.createCard()
     }
 
     private func setShortcutPreference(_ preference: ShortcutPreference) {

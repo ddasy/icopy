@@ -1,7 +1,8 @@
 iCopyApp 可执行目标入口目录。
 
 - `main.swift` — AppKit 应用主循环入口。
-- `AppDelegate.swift` — 创建菜单栏入口并编排快捷键、登录项、主面板和设置窗口。
+- `AppDelegate.swift` — 创建菜单栏入口并编排快捷键、登录项、主面板、设置窗口和桌面卡片。
+- `DesktopCard/` — 桌面卡片的 AppKit 桥接(窗口/锁定覆盖层/复制提示/多卡片拥有者),见其 README。
 - `KeyboardShortcut.swift` — 定义全局呼出快捷键和偏好存储。
 - `LoginItemSettings.swift` — 管理 macOS 登录项开机自启状态。
 - `GlobalHotKeyRegistrar.swift` — 注册 Carbon 全局快捷键。
@@ -11,3 +12,4 @@ iCopyApp 可执行目标入口目录。
 
 ## Cross-refs
 - **intra** — `Features/ClipboardPanel/Sources/ClipboardPanel/README.md`
+- **intra** — `Features/DesktopCard/Sources/DesktopCard/README.md`

@@ -8,6 +8,7 @@
 - 领域模型与业务规则:`Packages/Core/README.md`
 - 历史记录持久化与检索:`Packages/Storage/README.md`
 - 功能视图(历史面板、收藏面板):`Features/ClipboardPanel/README.md`
+- 桌面便签卡片(手动/剪贴板、分区、锁定嵌入桌面):`Features/DesktopCard/README.md`
 
 ## 基础设施
 - 应用入口与 AppKit 桥接(菜单栏):`App/README.md`
