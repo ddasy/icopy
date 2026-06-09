@@ -103,3 +103,8 @@ func setModeMaintainsInvariants() {
     #expect(vm.card.sections.count == 1)
     #expect(vm.card.clipboardSource == nil)
 }
+
+@Test
+func colorPaletteIncludesWhite() {
+    #expect(StickyCardColorPreset.palette.contains { $0.id == "white" && $0.color == .white })
+}

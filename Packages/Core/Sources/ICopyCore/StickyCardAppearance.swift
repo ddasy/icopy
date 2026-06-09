@@ -18,7 +18,10 @@ public struct StickyCardColor: Codable, Equatable, Hashable, Sendable {
         self.alpha = alpha.clampedUnit
     }
 
-    /// 默认主文本色(深色,接近系统 label)。
+    /// 白色文本色。
+    public static let white = StickyCardColor(red: 1, green: 1, blue: 1, alpha: 1)
+
+    /// 深色主文本色(接近系统 label)。
     public static let primaryLabel = StickyCardColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
 }
 
@@ -35,7 +38,7 @@ public struct StickyCardAppearance: Codable, Equatable, Hashable, Sendable {
         fontSize: Double = 14,
         fontWeight: StickyCardFontWeight = .regular,
         fontFamily: String? = nil,
-        textColor: StickyCardColor = .primaryLabel,
+        textColor: StickyCardColor = .white,
         textIntensity: Double = 1.0
     ) {
         self.opacity = opacity.clamped(to: 0.1...1.0)

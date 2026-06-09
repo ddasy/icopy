@@ -123,6 +123,12 @@ func appearanceClampsValues() {
 }
 
 @Test
+func appearanceDefaultsToWhiteText() {
+    #expect(StickyCardAppearance.default.textColor == .white)
+    #expect(StickyCardItem().appearance.textColor == .white)
+}
+
+@Test
 func cardCodableRoundTripPreservesFrameAndContent() throws {
     let original = StickyCardItem(
         contentMode: .manual,

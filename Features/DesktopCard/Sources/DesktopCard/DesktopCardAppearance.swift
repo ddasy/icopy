@@ -46,6 +46,7 @@ public struct StickyCardColorPreset: Identifiable, Equatable, Sendable {
     }
 
     public static let palette: [StickyCardColorPreset] = [
+        .init(id: "white", name: "白色", color: .white),
         .init(id: "ink", name: "墨黑", color: StickyCardColor(red: 0.1, green: 0.1, blue: 0.1)),
         .init(id: "slate", name: "石板", color: StickyCardColor(red: 0.30, green: 0.34, blue: 0.42)),
         .init(id: "red", name: "朱红", color: StickyCardColor(red: 0.78, green: 0.16, blue: 0.16)),

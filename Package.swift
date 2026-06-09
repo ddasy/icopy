@@ -74,7 +74,8 @@ let package = Package(
         .testTarget(
             name: "DesktopCardTests",
             dependencies: ["DesktopCard"],
-            path: "Features/DesktopCard/Tests/DesktopCardTests"
+            path: "Features/DesktopCard/Tests/DesktopCardTests",
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "iCopyApp",
