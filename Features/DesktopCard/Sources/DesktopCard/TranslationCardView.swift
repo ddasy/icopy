@@ -6,6 +6,7 @@ import SwiftUI
 struct TranslationCardView: View {
     @ObservedObject var viewModel: DesktopCardViewModel
     let appearance: StickyCardAppearance
+    @StateObject private var speechPlayer = TranslationSpeechPlayer()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,6 +59,16 @@ struct TranslationCardView: View {
             Text(directionLabel)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(appearance.swiftUITextColor.opacity(0.7))
+            Button {
+                speechPlayer.toggle(text: sourceText, language: sourceLanguage)
+            } label: {
+                Image(systemName: speechPlayer.isSpeaking ? "speaker.slash" : "speaker.wave.2")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(appearance.swiftUITextColor.opacity(sourceTextIsEmpty ? 0.3 : 0.7))
+            .disabled(sourceTextIsEmpty)
+            .help("朗读原文")
             Spacer()
         }
         .padding(.horizontal, 10)
@@ -113,6 +124,14 @@ struct TranslationCardView: View {
 
     private var directionLabel: String {
         StickyCardItem.detectTarget(for: sourceText) == .english ? "中 -> EN" : "EN -> 中"
+    }
+
+    private var sourceLanguage: TranslationLanguage {
+        StickyCardItem.detectTarget(for: sourceText) == .english ? .chinese : .english
+    }
+
+    private var sourceTextIsEmpty: Bool {
+        sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var nsFont: NSFont {
