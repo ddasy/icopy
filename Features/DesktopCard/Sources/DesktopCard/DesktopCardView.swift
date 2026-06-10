@@ -66,6 +66,7 @@ public struct DesktopCardView: View {
             ManualSectionsView(
                 viewModel: viewModel,
                 appearance: appearance,
+                onCopied: onCopied,
                 focusedSectionID: $focusedSectionID,
                 caretCharOffset: $caretCharOffset
             )

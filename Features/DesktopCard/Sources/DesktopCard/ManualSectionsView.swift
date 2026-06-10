@@ -7,6 +7,7 @@ import SwiftUI
 struct ManualSectionsView: View {
     @ObservedObject var viewModel: DesktopCardViewModel
     let appearance: StickyCardAppearance
+    let onCopied: () -> Void
     @Binding var focusedSectionID: StickyCardSection.ID?
     @Binding var caretCharOffset: Int
 
@@ -58,6 +59,10 @@ struct ManualSectionsView: View {
                         .padding(.vertical, 6)
                         .contentShape(Rectangle())
                         .reportCopyRegion(.section(section.id))
+                        .onTapGesture {
+                            guard viewModel.card.isLocked else { return }
+                            if viewModel.copySection(id: section.id) { onCopied() }
+                        }
 
                     if section.id != viewModel.sections.last?.id {
                         Divider().opacity(0.45).padding(.horizontal, 8)

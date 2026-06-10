@@ -7,7 +7,8 @@ final class DoubleCommandMonitor {
     private var globalMonitor: Any?
     private var isCommandDown = false
     private var lastCommandUpAt: Date?
-    private let threshold: TimeInterval = 0.35
+    private let minimumDoubleTapInterval: TimeInterval = 0.08
+    private let maximumDoubleTapInterval: TimeInterval = 0.35
     private var action: (() -> Void)?
 
     func start(action: @escaping () -> Void) {
@@ -48,7 +49,11 @@ final class DoubleCommandMonitor {
             isCommandDown = true
             guard onlyCommand else { return }
 
-            if let lastCommandUpAt, Date().timeIntervalSince(lastCommandUpAt) <= threshold {
+            if let lastCommandUpAt {
+                let interval = Date().timeIntervalSince(lastCommandUpAt)
+                guard interval >= minimumDoubleTapInterval else { return }
+                guard interval <= maximumDoubleTapInterval else { return }
+
                 self.lastCommandUpAt = nil
                 action?()
             }

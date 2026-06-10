@@ -16,3 +16,5 @@
 ./package.sh
 open build/iCopy.app
 ```
+
+`package.sh` 会把 `Resources/` 打包到 `.app` 中,包含本地 TTS 运行时与语音模型。

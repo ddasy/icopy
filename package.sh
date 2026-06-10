@@ -12,6 +12,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 swift build -c release
 cp ".build/release/icopy" "$APP/Contents/MacOS/$APP_NAME"
+if [ -d "Resources" ]; then
+    cp -R Resources/. "$APP/Contents/Resources/"
+fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

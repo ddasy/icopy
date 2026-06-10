@@ -33,7 +33,7 @@ final class LockOverlayController {
     private let toolbarEdgeHitWidth: CGFloat = 36
     private let toolbarSecondaryHitWidth: CGFloat = 28
     private var copyZoneLevel: NSWindow.Level {
-        NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)))
+        NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
     }
     private var stripLevel: NSWindow.Level {
         NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)

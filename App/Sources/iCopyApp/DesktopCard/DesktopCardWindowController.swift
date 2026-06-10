@@ -36,15 +36,17 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
     func show(activate: Bool = true) {
         let panel = panel ?? makeWindow()
         self.panel = panel
-        applyState(viewModel.card, force: true)
         if viewModel.usesDesktopLock {
             panel.orderFront(nil)
+            applyState(viewModel.card, force: true)
         } else if activate {
+            applyState(viewModel.card, force: true)
             // 无边框面板需 app 激活 + 成为 key,内部 NSTextView 才能取得第一响应者接受输入。
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
             if viewModel.card.isManual || viewModel.card.isTranslation { focusFirstTextView() }
         } else {
+            applyState(viewModel.card, force: true)
             panel.orderFront(nil)
         }
     }
@@ -181,6 +183,10 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
     private func showSettings() {
         let settings = settingsPanel ?? makeSettingsPanel()
         self.settingsPanel = settings
+        if settings.isVisible {
+            settings.orderOut(nil)
+            return
+        }
         if let card = panel {
             settings.setFrameTopLeftPoint(NSPoint(x: card.frame.maxX + 8, y: card.frame.maxY))
         }
