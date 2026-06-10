@@ -16,12 +16,12 @@ public final class DesktopCardViewModel: ObservableObject {
     public let clipboard: ClipboardViewModel?
     public var translation: StickyCardTranslation? { card.translation }
 
+    /// 翻译管线与活跃状态(注入了 translator 时非 nil);视图的方向行/译文区直接观察它。
+    public let translationController: TranslationController?
+
     private let pasteboard: PasteboardWriting
-    private let translator: TranslationService?
     private let onPersist: (StickyCardItem) -> Void
     private var persistTask: Task<Void, Never>?
-    private var translateTask: Task<Void, Never>?
-    private var lastTranslatedSource: String = ""
     private var clipboardObservation: AnyCancellable?
 
     public init(
@@ -34,16 +34,11 @@ public final class DesktopCardViewModel: ObservableObject {
         self.card = card
         self.pasteboard = pasteboard
         self.clipboard = clipboard
-        self.translator = translator
+        self.translationController = translator.map { TranslationController(translator: $0) }
         self.onPersist = onPersist
         if self.card.isTranslation, self.card.isLocked {
             self.card.translation?.isWindowLocked = true
             self.card.lockState = .unlocked
-        }
-        if let translation = card.translation,
-           translation.status == .done,
-           !translation.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            self.lastTranslatedSource = translation.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         // 剪贴板模式:共享集合变化时转发,使桌面列表(及锁定态可复制区域)实时刷新。
@@ -52,7 +47,13 @@ public final class DesktopCardViewModel: ObservableObject {
                 self?.objectWillChange.send()
             }
         }
-        scheduleTranslate()
+
+        translationController?.onSettled = { [weak self] source, translated, target, status in
+            self?.translationSettled(source: source, translated: translated, target: target, status: status)
+        }
+        if let translation = self.card.translation {
+            translationController?.restore(translation)
+        }
     }
 
     public var id: StickyCardItem.ID { card.id }
@@ -110,23 +111,33 @@ public final class DesktopCardViewModel: ObservableObject {
     public func setSourceText(_ text: String) {
         guard card.translation != nil else { return }
         card.translation?.sourceText = text
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            translateTask?.cancel()
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             card.translation?.translatedText = ""
             card.translation?.status = .idle
-            lastTranslatedSource = ""
         }
         persistSoon()
-        scheduleTranslate()
+        translationController?.setSource(text)
     }
 
     @discardableResult
     public func copyTranslation() -> Bool {
-        guard let text = card.translation?.translatedText.trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty else { return false }
+        let live = translationController?.translatedText ?? card.translation?.translatedText ?? ""
+        let text = live.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return false }
         pasteboard.writeString(text)
         return true
+    }
+
+    /// 翻译尘埃落定:回写卡片持久态;成功时把英文侧文本写入系统剪贴板
+    /// (中→英复制英文译文,英→中复制英文原文)。
+    private func translationSettled(source: String, translated: String, target: TranslationLanguage, status: TranslationStatus) {
+        guard card.translation != nil else { return }
+        card.translation?.translatedText = translated
+        card.translation?.status = status
+        persistNow()
+        if status == .done {
+            pasteboard.writeString(target == .english ? translated : source)
+        }
     }
 
     // MARK: - 状态
@@ -155,18 +166,20 @@ public final class DesktopCardViewModel: ObservableObject {
             if card.sections.isEmpty { card.sections = [StickyCardSection()] }
             card.clipboardSource = nil
             card.translation = nil
-            translateTask?.cancel()
+            translationController?.reset()
         case .clipboard:
             card.sections = []
             if card.clipboardSource == nil { card.clipboardSource = StickyCardClipboardSource(scope: .history) }
             card.translation = nil
-            translateTask?.cancel()
+            translationController?.reset()
         case .translation:
             card.sections = []
             card.clipboardSource = nil
             card.lockState = .unlocked
             if card.translation == nil { card.translation = StickyCardTranslation() }
-            scheduleTranslate()
+            if let translation = card.translation {
+                translationController?.restore(translation)
+            }
         }
         persistNow()
     }
@@ -207,46 +220,4 @@ public final class DesktopCardViewModel: ObservableObject {
         onPersist(card)
     }
 
-    private func scheduleTranslate() {
-        translateTask?.cancel()
-        guard let translator, let translation = card.translation else { return }
-        let source = translation.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !source.isEmpty, source != lastTranslatedSource else { return }
-        translateTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(700))
-            guard !Task.isCancelled else { return }
-            await self.runTranslation(source: source, translator: translator)
-        }
-    }
-
-    private func runTranslation(source: String, translator: TranslationService) async {
-        let target = StickyCardItem.detectTarget(for: source)
-        card.translation?.status = .translating
-        objectWillChange.send()
-        do {
-            let result = try await translator.translate(source, to: target)
-            guard !Task.isCancelled else { return }
-            card.translation?.translatedText = result
-            card.translation?.status = .done
-            lastTranslatedSource = source
-            pasteboard.writeString(source)
-        } catch {
-            guard !Task.isCancelled else { return }
-            card.translation?.status = .failed(Self.message(for: error))
-        }
-        objectWillChange.send()
-        persistNow()
-    }
-
-    private static func message(for error: Error) -> String {
-        if let translationError = error as? TranslationError {
-            switch translationError {
-            case .emptyInput: return "请输入要翻译的内容"
-            case .server(let status, let body): return "LM Studio 返回 \(status): \(body)"
-            case .malformedResponse: return "LM Studio 响应格式不正确"
-            case .transport(let message): return "连接失败: \(message)"
-            }
-        }
-        return error.localizedDescription
-    }
 }

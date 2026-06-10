@@ -79,6 +79,47 @@ struct LMStudioTranslationServiceTests {
     }
 
     @Test
+    func streamsDeltasFromServerSentEvents() async throws {
+        let capturedRequest = CapturedRequest()
+        StubURLProtocol.handler = { request in
+            let body = Self.requestBody(from: request)
+            capturedRequest.payload = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+            let sse = """
+            data: {"choices":[{"delta":{"role":"assistant","content":"Hel"}}]}
+
+            data: {"choices":[{"delta":{"content":"lo"}}]}
+
+            data: {"choices":[{"delta":{}}]}
+
+            data: [DONE]
+            """.data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, sse)
+        }
+        let service = LMStudioTranslationService(config: .default, session: Self.stubbedSession())
+
+        var chunks: [String] = []
+        for try await delta in service.translateStream("你好", to: .english) {
+            chunks.append(delta)
+        }
+
+        #expect(chunks == ["Hel", "lo"])
+        #expect(capturedRequest.payload?["stream"] as? Bool == true)
+    }
+
+    @Test
+    func streamingReportsServerErrors() async throws {
+        StubURLProtocol.handler = { request in
+            let data = #"{"error":"bad"}"#.data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, data)
+        }
+        let service = LMStudioTranslationService(config: .default, session: Self.stubbedSession())
+
+        await #expect(throws: TranslationError.server(status: 500, body: #"{"error":"bad"}"#)) {
+            for try await _ in service.translateStream("hello", to: .chinese) {}
+        }
+    }
+
+    @Test
     func rejectsEmptyInput() async {
         let service = LMStudioTranslationService(config: .default, session: Self.stubbedSession())
 

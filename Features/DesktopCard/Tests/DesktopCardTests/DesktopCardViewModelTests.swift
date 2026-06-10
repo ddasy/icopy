@@ -1,5 +1,6 @@
 import AppKit
 import ClipboardPanel
+import Combine
 import Foundation
 import ICopyClipboard
 import ICopyCore
@@ -37,6 +38,19 @@ private actor MockTranslationService: TranslationService {
     }
 
     var callCount: Int { calls.count }
+}
+
+private struct StreamingStubService: TranslationService {
+    let chunks: [String]
+
+    func translate(_ text: String, to target: TranslationLanguage) async throws -> String { chunks.joined() }
+
+    func translateStream(_ text: String, to target: TranslationLanguage) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            for chunk in chunks { continuation.yield(chunk) }
+            continuation.finish()
+        }
+    }
 }
 
 @MainActor
@@ -150,7 +164,7 @@ func setModeMaintainsInvariants() {
 
 @MainActor
 @Test
-func translationDebounceUpdatesResult() async throws {
+func translationCommitUpdatesResult() async throws {
     let translator = MockTranslationService(results: ["Hello"])
     let pasteboard = FakePasteboard()
     let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
@@ -165,12 +179,12 @@ func translationDebounceUpdatesResult() async throws {
     #expect(calls.count == 1)
     #expect(calls.first?.text == "你好")
     #expect(calls.first?.target == .english)
-    #expect(pasteboard.written == ["你好"])
+    #expect(pasteboard.written == ["Hello"]) // 中→英:自动复制英文译文
 }
 
 @MainActor
 @Test
-func translationDebounceUsesOnlyFinalEdit() async throws {
+func translationCoalescesToLatestCommit() async throws {
     let translator = MockTranslationService(results: ["Bonjour"])
     let pasteboard = FakePasteboard()
     let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
@@ -184,7 +198,7 @@ func translationDebounceUsesOnlyFinalEdit() async throws {
     #expect(vm.translation?.translatedText == "Bonjour")
     #expect(await translator.callCount == 1)
     #expect(await translator.calls.first?.text == "hello")
-    #expect(pasteboard.written == ["hello"])
+    #expect(pasteboard.written == ["hello"]) // 英→中:自动复制英文原文
 }
 
 @MainActor
@@ -219,6 +233,42 @@ func translationSkipsSameSourceAfterSuccess() async throws {
     try await Task.sleep(for: .milliseconds(850))
 
     #expect(await translator.callCount == 1)
+}
+
+@MainActor
+@Test
+func translationStreamsIncrementalDeltas() async throws {
+    let controller = TranslationController(
+        translator: StreamingStubService(chunks: ["Hel", "lo", " world"]),
+        coalesceWindow: .milliseconds(10)
+    )
+    var observed: [String] = []
+    let cancellable = controller.$translatedText.sink { observed.append($0) }
+
+    controller.setSource("你好世界")
+    try await Task.sleep(for: .milliseconds(300))
+
+    #expect(controller.status == .done)
+    #expect(controller.translatedText == "Hello world")
+    #expect(observed.contains("Hel"))   // 流式中间态曾被发布
+    #expect(observed.contains("Hello"))
+    cancellable.cancel()
+}
+
+@MainActor
+@Test
+func translationControllerSettlesIntoCard() async throws {
+    let translator = MockTranslationService(results: ["Hello"])
+    let pasteboard = FakePasteboard()
+    let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
+    let vm = DesktopCardViewModel(card: card, pasteboard: pasteboard, translator: translator)
+
+    vm.setSourceText("你好")
+    try await Task.sleep(for: .milliseconds(850))
+
+    #expect(vm.translationController?.translatedText == "Hello")
+    #expect(vm.translationController?.status == .done)
+    #expect(vm.translation?.translatedText == "Hello") // 落定后回写持久态
 }
 
 @Test
