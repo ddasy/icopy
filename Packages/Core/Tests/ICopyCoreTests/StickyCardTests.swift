@@ -182,6 +182,22 @@ func cardDecodesStoredJSONWithoutTranslationField() throws {
 }
 
 @Test
+func translationDecodesStoredJSONWithoutWindowLockField() throws {
+    let original = StickyCardTranslation(sourceText: "hello", translatedText: "你好", status: .done)
+    let data = try JSONEncoder().encode(original)
+    var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    object.removeValue(forKey: "isWindowLocked")
+    let legacyData = try JSONSerialization.data(withJSONObject: object)
+
+    let decoded = try JSONDecoder().decode(StickyCardTranslation.self, from: legacyData)
+
+    #expect(decoded.sourceText == "hello")
+    #expect(decoded.translatedText == "你好")
+    #expect(decoded.status == .done)
+    #expect(decoded.isWindowLocked == false)
+}
+
+@Test
 func detectTranslationTargetUsesCJKRatio() {
     #expect(StickyCardItem.detectTarget(for: "你好世界") == .english)
     #expect(StickyCardItem.detectTarget(for: "Hello world") == .chinese)

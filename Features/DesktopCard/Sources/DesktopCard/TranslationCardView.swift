@@ -6,6 +6,7 @@ import SwiftUI
 struct TranslationCardView: View {
     @ObservedObject var viewModel: DesktopCardViewModel
     let appearance: StickyCardAppearance
+    let onCopied: () -> Void
     @StateObject private var speechPlayer = TranslationSpeechPlayer()
 
     var body: some View {
@@ -26,32 +27,21 @@ struct TranslationCardView: View {
 
     @ViewBuilder
     private var sourcePane: some View {
-        if viewModel.card.isLocked {
-            ScrollView {
-                Text(sourceText.isEmpty ? " " : sourceText)
-                    .font(appearance.swiftUIFont)
-                    .foregroundStyle(appearance.swiftUITextColor)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-            }
-            .scrollContentBackground(.hidden)
-        } else {
-            ScrollView {
-                SectionTextView(
-                    text: Binding(
-                        get: { sourceText },
-                        set: { viewModel.setSourceText($0) }
-                    ),
-                    font: nsFont,
-                    textColor: nsTextColor,
-                    onFocus: {},
-                    onCaret: { _ in }
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
-            }
-            .scrollContentBackground(.hidden)
+        ScrollView {
+            SectionTextView(
+                text: Binding(
+                    get: { sourceText },
+                    set: { viewModel.setSourceText($0) }
+                ),
+                font: nsFont,
+                textColor: nsTextColor,
+                onFocus: {},
+                onCaret: { _ in }
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
         }
+        .scrollContentBackground(.hidden)
     }
 
     private var directionRow: some View {
@@ -84,6 +74,9 @@ struct TranslationCardView: View {
             .padding(10)
             .contentShape(Rectangle())
             .reportCopyRegion(.translation)
+            .onTapGesture {
+                if viewModel.copyTranslation() { onCopied() }
+            }
         }
         .scrollContentBackground(.hidden)
     }

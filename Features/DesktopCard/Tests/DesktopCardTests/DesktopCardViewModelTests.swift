@@ -86,6 +86,24 @@ func toggleLockFlipsState() {
 
 @MainActor
 @Test
+func translationLockUsesWindowOnlyState() {
+    let card = StickyCardItem(contentMode: .translation, sections: [], translation: StickyCardTranslation())
+    let vm = DesktopCardViewModel(card: card, pasteboard: FakePasteboard())
+
+    #expect(vm.card.isLocked == false)
+    #expect(vm.isWindowLocked == false)
+    #expect(vm.usesDesktopLock == false)
+
+    vm.toggleLock()
+
+    #expect(vm.card.isLocked == false)
+    #expect(vm.card.translation?.isWindowLocked == true)
+    #expect(vm.isWindowLocked == true)
+    #expect(vm.usesDesktopLock == false)
+}
+
+@MainActor
+@Test
 func clipboardCardCopyItemWritesToPasteboard() {
     // 剪贴板卡片复制路径:copyItem → 共享 ClipboardViewModel.copy → 写入系统剪贴板。
     let store = InMemoryClipboardStore(items: [ClipboardItem(content: "HELLO_PB")])

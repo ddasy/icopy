@@ -18,7 +18,8 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
     private var overlay: LockOverlayController?
     private var settingsPanel: NSPanel?
     private var cardObservation: AnyCancellable?
-    private var lastLocked: Bool?
+    private var lastDesktopLocked: Bool?
+    private var lastWindowLocked: Bool?
 
     init(
         viewModel: DesktopCardViewModel,
@@ -36,13 +37,13 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
         let panel = panel ?? makeWindow()
         self.panel = panel
         applyState(viewModel.card, force: true)
-        if viewModel.card.isLocked {
+        if viewModel.usesDesktopLock {
             panel.orderFront(nil)
         } else if activate {
             // 无边框面板需 app 激活 + 成为 key,内部 NSTextView 才能取得第一响应者接受输入。
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
-            if viewModel.card.isManual { focusFirstTextView() }
+            if viewModel.card.isManual || viewModel.card.isTranslation { focusFirstTextView() }
         } else {
             panel.orderFront(nil)
         }
@@ -116,23 +117,22 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
 
     private func applyState(_ card: StickyCardItem, force: Bool) {
         guard let panel else { return }
-        let locked = card.isLocked
+        let desktopLocked = !card.isTranslation && card.isLocked
+        let windowLocked = card.isTranslation ? (card.translation?.isWindowLocked ?? false) : card.isLocked
         overlay?.updateToolbar(includesDividerButton: card.isManual)
-        guard force || locked != lastLocked else { return }
-        lastLocked = locked
+        guard force || desktopLocked != lastDesktopLocked || windowLocked != lastWindowLocked else { return }
+        lastDesktopLocked = desktopLocked
+        lastWindowLocked = windowLocked
 
-        if locked {
+        if desktopLocked {
             panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) - 1)
-            panel.isMovable = false
-            panel.isMovableByWindowBackground = false
-            panel.isResizingEnabled = false
         } else {
             panel.level = .normal
-            panel.isMovable = true
-            panel.isMovableByWindowBackground = true
-            panel.isResizingEnabled = true
         }
-        overlay?.setLocked(locked)
+        panel.isMovable = !windowLocked
+        panel.isMovableByWindowBackground = !windowLocked
+        panel.isResizingEnabled = !windowLocked
+        overlay?.setLocked(desktopLocked)
     }
 
     private func performCopy(_ payload: CardCopyableRegion.Payload, at screenPoint: NSPoint) {

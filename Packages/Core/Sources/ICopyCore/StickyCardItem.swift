@@ -79,11 +79,41 @@ public struct StickyCardTranslation: Codable, Equatable, Hashable, Sendable {
     public var sourceText: String
     public var translatedText: String
     public var status: TranslationStatus
+    public var isWindowLocked: Bool
 
-    public init(sourceText: String = "", translatedText: String = "", status: TranslationStatus = .idle) {
+    public init(
+        sourceText: String = "",
+        translatedText: String = "",
+        status: TranslationStatus = .idle,
+        isWindowLocked: Bool = false
+    ) {
         self.sourceText = sourceText
         self.translatedText = translatedText
         self.status = status
+        self.isWindowLocked = isWindowLocked
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sourceText
+        case translatedText
+        case status
+        case isWindowLocked
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sourceText = try container.decode(String.self, forKey: .sourceText)
+        translatedText = try container.decode(String.self, forKey: .translatedText)
+        status = try container.decode(TranslationStatus.self, forKey: .status)
+        isWindowLocked = try container.decodeIfPresent(Bool.self, forKey: .isWindowLocked) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sourceText, forKey: .sourceText)
+        try container.encode(translatedText, forKey: .translatedText)
+        try container.encode(status, forKey: .status)
+        try container.encode(isWindowLocked, forKey: .isWindowLocked)
     }
 }
 

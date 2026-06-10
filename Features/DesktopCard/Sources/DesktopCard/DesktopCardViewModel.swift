@@ -36,6 +36,10 @@ public final class DesktopCardViewModel: ObservableObject {
         self.clipboard = clipboard
         self.translator = translator
         self.onPersist = onPersist
+        if self.card.isTranslation, self.card.isLocked {
+            self.card.translation?.isWindowLocked = true
+            self.card.lockState = .unlocked
+        }
         if let translation = card.translation,
            translation.status == .done,
            !translation.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -52,6 +56,10 @@ public final class DesktopCardViewModel: ObservableObject {
     }
 
     public var id: StickyCardItem.ID { card.id }
+    public var usesDesktopLock: Bool { !card.isTranslation && card.isLocked }
+    public var isWindowLocked: Bool {
+        card.isTranslation ? (card.translation?.isWindowLocked ?? false) : card.isLocked
+    }
 
     // MARK: - 手动内容
 
@@ -124,6 +132,14 @@ public final class DesktopCardViewModel: ObservableObject {
     // MARK: - 状态
 
     public func toggleLock() {
+        if card.isTranslation {
+            if card.translation == nil { card.translation = StickyCardTranslation() }
+            card.translation?.isWindowLocked.toggle()
+            card.lockState = .unlocked
+            card.updatedAt = Date()
+            persistNow()
+            return
+        }
         var state = card.lockState
         state.toggle()
         card.setLock(state)
@@ -148,6 +164,7 @@ public final class DesktopCardViewModel: ObservableObject {
         case .translation:
             card.sections = []
             card.clipboardSource = nil
+            card.lockState = .unlocked
             if card.translation == nil { card.translation = StickyCardTranslation() }
             scheduleTranslate()
         }

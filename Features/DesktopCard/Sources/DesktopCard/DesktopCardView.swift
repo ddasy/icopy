@@ -34,7 +34,7 @@ public struct DesktopCardView: View {
             header
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .opacity(viewModel.card.isLocked ? 0 : 1)
+                .opacity(viewModel.usesDesktopLock ? 0 : 1)
             Divider().opacity(0.4)
             content
         }
@@ -52,14 +52,14 @@ public struct DesktopCardView: View {
         .background(Color.black.opacity(0.001))
         .onPreferenceChange(CardCopyableRegionsKey.self) { regions in
             // 仅锁定态需要区域;解锁态清空,避免覆盖层误命中。
-            onRegionsChanged(viewModel.card.isLocked ? regions : [])
+            onRegionsChanged(viewModel.usesDesktopLock ? regions : [])
         }
     }
 
     @ViewBuilder
     private var content: some View {
         if viewModel.card.isTranslation {
-            TranslationCardView(viewModel: viewModel, appearance: appearance)
+            TranslationCardView(viewModel: viewModel, appearance: appearance, onCopied: onCopied)
         } else if viewModel.card.isClipboard {
             DesktopClipboardListView(viewModel: viewModel, appearance: appearance, onCopied: onCopied)
         } else {
@@ -75,10 +75,10 @@ public struct DesktopCardView: View {
     private var header: some View {
         HStack(spacing: 12) {
             Button(action: viewModel.toggleLock) {
-                Image(systemName: viewModel.card.isLocked ? "lock" : "lock.open")
+                Image(systemName: viewModel.isWindowLocked ? "lock" : "lock.open")
             }
             .buttonStyle(.plain)
-            .help(viewModel.card.isLocked ? "解锁卡片" : "锁定卡片")
+            .help(viewModel.isWindowLocked ? "解锁卡片" : "锁定卡片")
 
             if viewModel.card.isManual {
                 Button(action: insertDivider) {
