@@ -3,7 +3,8 @@ import ICopyCore
 import SwiftUI
 
 /// 手动卡片内容:按 `viewModel.rows` 分组渲染——行内横向并排(竖向分隔占独立间隔列,按 `columnWeight`
-/// 分配文本列宽),行间纵向堆叠(横向分隔)。分隔线悬停浮出 ✕ 可删除(仅解锁态)。解锁态每个分区一个
+/// 分配文本列宽),行间纵向堆叠(横向分隔)。分隔线悬停浮出 ✕ 可删除;竖向分隔另有 ⇔ 按钮可按住左右
+/// 拖动调整分隔位置(均仅解锁态)。解锁态每个分区一个
 /// 可编辑文本框(上报焦点+光标+光标横向占比);锁定态每个分区渲染为只读文本并上报可复制区域。
 struct ManualSectionsView: View {
     @ObservedObject var viewModel: DesktopCardViewModel
@@ -61,6 +62,7 @@ struct ManualSectionsView: View {
                     WeightedRow(
                         sections: rowSections,
                         onDeleteColumn: canDelete ? { viewModel.deleteSection(id: $0) } : nil,
+                        onResizeColumn: canDelete ? { viewModel.resizeColumn(leftID: $0, rightID: $1, leftWeight: $2) } : nil,
                         cell: cell
                     )
                     if rowIndex != grouped.count - 1 {
@@ -104,20 +106,39 @@ struct ManualSectionsView: View {
 private struct WeightedRow<Cell: View>: View {
     let sections: [StickyCardSection]
     let onDeleteColumn: ((StickyCardSection.ID) -> Void)?
+    let onResizeColumn: ((StickyCardSection.ID, StickyCardSection.ID, Double) -> Void)?
     @ViewBuilder let cell: (StickyCardSection) -> Cell
 
+    /// 行布局宽度(不含外侧 padding);仅供渲染期计算每单位权重对应像素。
+    @State private var rowWidth: CGFloat = 0
+
     var body: some View {
+        let gutterCount = max(sections.count - 1, 0)
+        let contentWidth = max(rowWidth - ColumnLayout.gutter * CGFloat(gutterCount), 1)
+        let divisor = max(sections.map(\.columnWeight).reduce(0, +), 1)
+        let pixelsPerWeight = contentWidth / CGFloat(divisor)
+
         WeightedHStack {
             ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
                 cell(section)
                     .layoutValue(key: ColumnWeightKey.self, value: CGFloat(section.columnWeight))
                 if section.id != sections.last?.id {
                     let nextID = sections[index + 1].id
-                    ColumnDividerHandle(onDelete: onDeleteColumn.map { delete in { delete(nextID) } })
-                        .layoutValue(key: ColumnWeightKey.self, value: 0)
+                    let rightWeight = sections[index + 1].columnWeight
+                    ColumnDividerHandle(
+                        leftWeight: section.columnWeight,
+                        rightWeight: rightWeight,
+                        pixelsPerWeight: pixelsPerWeight,
+                        onDelete: onDeleteColumn.map { delete in { delete(nextID) } },
+                        onResize: onResizeColumn.map { resize in { newLeftWeight in
+                            resize(section.id, nextID, newLeftWeight)
+                        }}
+                    )
+                    .layoutValue(key: ColumnWeightKey.self, value: 0)
                 }
             }
         }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }, action: { rowWidth = $0 })
         .padding(.horizontal, ColumnLayout.rowInset)
     }
 }
@@ -128,6 +149,8 @@ private enum ColumnLayout {
     static let gutter: CGFloat = 13
     /// 每行左右外边距(文本列之间不再各自加内边距,仅靠间隔列分隔)。
     static let rowInset: CGFloat = 8
+    /// 拖动竖向分隔时每列保留的最小像素宽度。
+    static let minColumnWidth: CGFloat = 8
     /// 切分时左列宽度的安全余量,保证光标前文本不被挤换行。
     static let splitSafetyMargin: CGFloat = 3
 }
@@ -181,22 +204,174 @@ private struct ColumnWeightKey: LayoutValueKey {
     static let defaultValue: CGFloat = 1
 }
 
-/// 列间竖向分隔:独占一条固定宽度间隔列,居中画 1pt 线;悬停时浮出 ✕ 按钮删除该分割(合并相邻两列)。
+/// 列间竖向分隔:独占一条固定宽度间隔列,居中画 1pt 线;悬停时浮出 ⇔ 移动按钮(按住左右拖调整分隔位置)
+/// 与其下方的 ✕ 按钮(删除该分割)。拖动期间**只动浮层不改模型**:线与按钮随光标用 `.offset` 平移(纯
+/// 渲染变换,不触发重排,故无反馈瞬移);松手才把新的左列权重一次性提交给 `onResize`,由其改权重重排。
 private struct ColumnDividerHandle: View {
+    let leftWeight: Double
+    let rightWeight: Double
+    let pixelsPerWeight: CGFloat
     let onDelete: (() -> Void)?
+    /// 松手提交:参数为新的左列权重;nil 时不显示移动按钮。
+    let onResize: ((Double) -> Void)?
     @State private var hovering = false
+    @State private var dragging = false
+    /// 拖动中浮层相对静止位的横向偏移(pt);仅渲染期使用,不入布局。
+    @State private var dragTranslation: CGFloat = 0
 
     var body: some View {
         ZStack {
-            Rectangle().fill(Color.primary.opacity(0.18)).frame(width: 1)
-            if hovering, let onDelete {
-                DeleteBadge(action: onDelete)
+            Rectangle()
+                .fill(dragging ? Color.accentColor.opacity(0.9) : Color.primary.opacity(0.18))
+                .frame(width: 1)
+                .offset(x: dragTranslation)
+            if hovering || dragging {
+                VStack(spacing: 4) {
+                    if let onResize {
+                        MoveBadge(
+                            leftWeight: leftWeight,
+                            rightWeight: rightWeight,
+                            pixelsPerWeight: pixelsPerWeight,
+                            onBegan: {
+                                dragging = true
+                                dragTranslation = 0
+                            },
+                            onChanged: { dragTranslation = $0 },
+                            onEnded: { newLeftWeight in
+                                dragging = false
+                                dragTranslation = 0
+                                onResize(newLeftWeight)
+                            }
+                        )
+                    }
+                    if let onDelete {
+                        DeleteBadge(action: onDelete)
+                    }
+                }
+                .offset(x: dragTranslation)
             }
         }
         .frame(width: ColumnLayout.gutter)
         .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
+    }
+}
+
+/// 分隔线移动按钮:按住左右拖动以调整分隔位置。拖动下沉到 AppKit 把手——SwiftUI DragGesture 的局部
+/// 坐标系会随分隔线自身移动而漂移(导致横跳),且纯手势不拦截 `isMovableByWindowBackground` 的窗口拖动。
+private struct MoveBadge: View {
+    let leftWeight: Double
+    let rightWeight: Double
+    let pixelsPerWeight: CGFloat
+    let onBegan: () -> Void
+    let onChanged: (CGFloat) -> Void
+    let onEnded: (Double) -> Void
+
+    var body: some View {
+        Image(systemName: "arrow.left.and.right.circle.fill")
+            .font(.system(size: 12))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(Color.white, Color.secondary)
+            .overlay(
+                HorizontalDragHandle(
+                    leftWeight: leftWeight,
+                    rightWeight: rightWeight,
+                    pixelsPerWeight: pixelsPerWeight,
+                    onBegan: onBegan,
+                    onChanged: onChanged,
+                    onEnded: onEnded
+                )
+            )
+            .help("按住左右拖动,调整分隔位置")
+    }
+}
+
+/// 透明 AppKit 拖动把手:吃掉鼠标按下(窗口不跟随拖动),以窗口坐标系上报自按下点起的横向位移——
+/// 该坐标系不随分隔线移动而漂移,拖动稳定。
+private struct HorizontalDragHandle: NSViewRepresentable {
+    var leftWeight: Double
+    var rightWeight: Double
+    var pixelsPerWeight: CGFloat
+    var onBegan: () -> Void
+    var onChanged: (CGFloat) -> Void
+    var onEnded: (Double) -> Void
+
+    func makeNSView(context: Context) -> DragHandleNSView {
+        let view = DragHandleNSView()
+        view.leftWeight = leftWeight
+        view.rightWeight = rightWeight
+        view.pixelsPerWeight = pixelsPerWeight
+        view.onBegan = onBegan
+        view.onChanged = onChanged
+        view.onEnded = onEnded
+        return view
+    }
+
+    func updateNSView(_ view: DragHandleNSView, context: Context) {
+        view.leftWeight = leftWeight
+        view.rightWeight = rightWeight
+        view.pixelsPerWeight = pixelsPerWeight
+        view.onBegan = onBegan
+        view.onChanged = onChanged
+        view.onEnded = onEnded
+    }
+}
+
+final class DragHandleNSView: NSView {
+    var leftWeight: Double = 0
+    var rightWeight: Double = 0
+    var pixelsPerWeight: CGFloat = 0
+    var onBegan: (() -> Void)?
+    var onChanged: ((CGFloat) -> Void)?
+    var onEnded: ((Double) -> Void)?
+    private var startX: CGFloat?
+    private var baseLeftWeight: Double = 0
+    private var basePixelsPerWeight: CGFloat = 0
+    private var dragBounds: ClosedRange<CGFloat> = 0...0
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .resizeLeftRight)
+    }
+
+    /// 以窗口坐标上报自按下点起的横向位移(该坐标系不随分隔线移动而漂移)。用常规响应链方法而非
+    /// `trackEvents` 同步循环:拖动期间只动浮层(`.offset` 渲染变换),本视图不重排、不重定位,故响应链
+    /// 投递的 mouseDragged 稳定到达;且每个事件回到 run loop,SwiftUI 才会刷新浮层偏移(嵌套
+    /// `.eventTracking` 循环会卡住渲染事务,导致浮层只在松手后才跳一下——表现为按住变蓝却不跟手)。
+    override func mouseDown(with event: NSEvent) {
+        guard pixelsPerWeight > 0 else { return }
+        startX = event.locationInWindow.x
+        baseLeftWeight = leftWeight
+        basePixelsPerWeight = pixelsPerWeight
+        let lo = -(CGFloat(leftWeight) * basePixelsPerWeight - ColumnLayout.minColumnWidth)
+        let hi = CGFloat(rightWeight) * basePixelsPerWeight - ColumnLayout.minColumnWidth
+        if lo <= hi {
+            dragBounds = lo...hi
+        } else {
+            dragBounds = 0...0
+        }
+        onBegan?()
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let startX else { return }
+        onChanged?(clampedTranslation(event.locationInWindow.x - startX))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let startX else { return }
+        self.startX = nil
+        let translation = clampedTranslation(event.locationInWindow.x - startX)
+        guard basePixelsPerWeight > 0 else { return }
+        onEnded?(baseLeftWeight + Double(translation / basePixelsPerWeight))
+    }
+
+    private func clampedTranslation(_ translation: CGFloat) -> CGFloat {
+        min(max(translation, dragBounds.lowerBound), dragBounds.upperBound)
     }
 }
 
@@ -236,8 +411,8 @@ private struct DeleteBadge: View {
     }
 }
 
-/// 自适应高度、可上报焦点与光标(字符偏移 + 横向占比)的 NSTextView 包装。SwiftUI 的 TextEditor
-/// 无法暴露光标位置,而"在光标处插入分隔符"需要它,故下沉到 AppKit。
+/// 自适应高度的 NSTextView 包装:编辑中的文本框在选区变化时同源上报焦点与光标(字符偏移 + 横向占比)。
+/// SwiftUI 的 TextEditor 无法暴露光标位置,而"在光标处插入分隔符"需要它,故下沉到 AppKit。
 struct SectionTextView: NSViewRepresentable {
     @Binding var text: String
     var font: NSFont
@@ -293,9 +468,11 @@ struct SectionTextView: NSViewRepresentable {
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
+            guard tv.window?.firstResponder === tv else { return }
             let nsString = tv.string as NSString
             let location = min(tv.selectedRange().location, nsString.length)
             let charOffset = nsString.substring(to: location).count
+            parent.onFocus()
             parent.onCaret(charOffset, Self.caretXFraction(in: tv, at: location))
         }
 

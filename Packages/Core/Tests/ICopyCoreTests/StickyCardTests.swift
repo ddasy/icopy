@@ -145,6 +145,61 @@ func deleteColumnLeavingSingleColumnRestoresFullWidth() {
 }
 
 @Test
+func resizeColumnRedistributesWeightBetweenAdjacentColumns() {
+    // 拖动分隔:左列设为 0.2,右列取两列总和的剩余(0.3 + 0.7 − 0.2 = 0.8),总和不变。
+    var card = StickyCardItem(sections: [
+        StickyCardSection(text: "L", startsNewRow: true, columnWeight: 0.3),
+        StickyCardSection(text: "R", startsNewRow: false, columnWeight: 0.7)
+    ])
+
+    let ok = card.resizeColumn(leftID: card.sections[0].id, rightID: card.sections[1].id, leftWeight: 0.2)
+
+    #expect(ok)
+    #expect(abs(card.sections[0].columnWeight - 0.2) < 1e-9)
+    #expect(abs(card.sections[1].columnWeight - 0.8) < 1e-9)
+}
+
+@Test
+func resizeColumnClampsToOneTenthPercentOfPairTotal() {
+    // 拖出范围:左列被夹紧到两列总权重的 0.1%…99.9%,任一列权重保持为正且总和不变。
+    var card = StickyCardItem(sections: [
+        StickyCardSection(text: "L", startsNewRow: true, columnWeight: 0.5),
+        StickyCardSection(text: "R", startsNewRow: false, columnWeight: 0.5)
+    ])
+    let lID = card.sections[0].id
+    let rID = card.sections[1].id
+
+    card.resizeColumn(leftID: lID, rightID: rID, leftWeight: -1.0)
+    #expect(abs(card.sections[0].columnWeight - 0.001) < 1e-9)
+    #expect(abs(card.sections[1].columnWeight - 0.999) < 1e-9)
+    #expect(card.sections[0].columnWeight > 0)
+    #expect(card.sections[1].columnWeight > 0)
+    #expect(abs(card.sections[0].columnWeight + card.sections[1].columnWeight - 1.0) < 1e-9)
+
+    card.resizeColumn(leftID: lID, rightID: rID, leftWeight: 2.0)
+    #expect(abs(card.sections[0].columnWeight - 0.999) < 1e-9)
+    #expect(abs(card.sections[1].columnWeight - 0.001) < 1e-9)
+    #expect(card.sections[0].columnWeight > 0)
+    #expect(card.sections[1].columnWeight > 0)
+    #expect(abs(card.sections[0].columnWeight + card.sections[1].columnWeight - 1.0) < 1e-9)
+}
+
+@Test
+func resizeColumnRejectsNonAdjacentColumns() {
+    // 非相邻(或顺序颠倒)的两列不接受重分配。
+    var card = StickyCardItem(sections: [
+        StickyCardSection(text: "A", startsNewRow: true, columnWeight: 0.3),
+        StickyCardSection(text: "B", startsNewRow: false, columnWeight: 0.3),
+        StickyCardSection(text: "C", startsNewRow: false, columnWeight: 0.4)
+    ])
+
+    let nonAdjacent = card.resizeColumn(leftID: card.sections[0].id, rightID: card.sections[2].id, leftWeight: 0.5)
+    let reversed = card.resizeColumn(leftID: card.sections[1].id, rightID: card.sections[0].id, leftWeight: 0.5)
+    #expect(!nonAdjacent)
+    #expect(!reversed)
+}
+
+@Test
 func deleteRowRemovesEntireRowIncludingColumns() {
     // 第一行单列;第二行竖分成两列。删第二行的横向分隔 → 整行(两列)移除。
     var card = StickyCardItem(sections: [StickyCardSection(text: "row1")])

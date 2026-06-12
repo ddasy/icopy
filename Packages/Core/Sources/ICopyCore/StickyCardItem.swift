@@ -286,6 +286,27 @@ public struct StickyCardItem: Identifiable, Codable, Equatable, Hashable, Sendab
         return true
     }
 
+    /// 拖动竖向分隔线:在相邻两列(`leftID` 在前、`rightID` 紧随其后)之间重新分配宽度——把左列权重设为
+    /// `leftWeight`,右列取两列权重之和的剩余部分。两列权重之和不变(不影响同行其他列与右侧留空),并各自
+    /// 夹紧到两列总权重的 0.1%…99.9%,仅保证权重严格 > 0;实用最小宽度由视图侧负责。
+    @discardableResult
+    public mutating func resizeColumn(
+        leftID: StickyCardSection.ID,
+        rightID: StickyCardSection.ID,
+        leftWeight: Double,
+        now: Date = Date()
+    ) -> Bool {
+        guard let li = sections.firstIndex(where: { $0.id == leftID }),
+              let ri = sections.firstIndex(where: { $0.id == rightID }), ri == li + 1 else { return false }
+        let total = sections[li].columnWeight + sections[ri].columnWeight
+        let minW = total * 0.001
+        let clamped = max(minW, min(total - minW, leftWeight))
+        sections[li].columnWeight = clamped
+        sections[ri].columnWeight = total - clamped
+        updatedAt = now
+        return true
+    }
+
     /// 单列行恒为满宽(权重 1);多列行保留各自的绝对占比(删列后不重分布,使其后列左移补位)。
     private mutating func normalizeSingleColumnRows() {
         var i = 0

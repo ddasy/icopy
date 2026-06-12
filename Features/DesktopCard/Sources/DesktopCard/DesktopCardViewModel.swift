@@ -88,6 +88,12 @@ public final class DesktopCardViewModel: ObservableObject {
         return newID
     }
 
+    /// 拖动竖向分隔:在相邻两列间重新分配宽度(把左列权重设为 leftWeight,右列取剩余)。
+    public func resizeColumn(leftID: StickyCardSection.ID, rightID: StickyCardSection.ID, leftWeight: Double) {
+        guard card.resizeColumn(leftID: leftID, rightID: rightID, leftWeight: leftWeight) else { return }
+        persistSoon()
+    }
+
     /// 删除竖向分隔右侧那一列(整块移除,不合并)。
     public func deleteSection(id: StickyCardSection.ID) {
         card.deleteSection(id: id)
