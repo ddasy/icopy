@@ -53,6 +53,71 @@ struct LMStudioTranslationServiceTests {
     }
 
     @Test
+    func sendsPolishPromptForChineseToEnglish() async throws {
+        let capturedRequest = CapturedRequest()
+        StubURLProtocol.handler = { request in
+            let body = Self.requestBody(from: request)
+            capturedRequest.payload = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+            let data = #"{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"#.data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, data)
+        }
+        let service = LMStudioTranslationService(config: .default, session: Self.stubbedSession())
+
+        _ = try await service.translate("第一第二第三", to: .english)
+
+        let payload = try #require(capturedRequest.payload)
+        #expect(payload["temperature"] as? Double == 0.3)
+        #expect(payload["top_p"] as? Double == 0.9)
+        #expect(payload["top_k"] as? Int == 20)
+        let messages = try #require(payload["messages"] as? [[String: String]])
+        let systemPrompt = try #require(messages.first?["content"])
+        #expect(systemPrompt.contains("professional translator and editor"))
+        #expect(systemPrompt.contains("format them as a real list"))
+        #expect(systemPrompt.contains("Polish the form, never the substance"))
+    }
+
+    @Test
+    func sendsDeterministicSamplingForEnglishToChinese() async throws {
+        let capturedRequest = CapturedRequest()
+        StubURLProtocol.handler = { request in
+            let body = Self.requestBody(from: request)
+            capturedRequest.payload = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+            let data = #"{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"#.data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, data)
+        }
+        let service = LMStudioTranslationService(config: .default, session: Self.stubbedSession())
+
+        _ = try await service.translate("hello", to: .chinese)
+
+        let payload = try #require(capturedRequest.payload)
+        #expect(payload["temperature"] as? Double == 0.0)
+        #expect(payload["top_k"] as? Int == 1)
+    }
+
+    @Test
+    func resolvesConfigProviderOnEachRequest() async throws {
+        let models = ModelSequence(["model-a", "model-b"])
+        let captured = ModelSequence([])
+        StubURLProtocol.handler = { request in
+            let body = Self.requestBody(from: request)
+            if let payload = try JSONSerialization.jsonObject(with: body) as? [String: Any],
+               let model = payload["model"] as? String {
+                captured.append(model)
+            }
+            let data = #"{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"#.data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, data)
+        }
+        let service = LMStudioTranslationService(session: Self.stubbedSession()) {
+            LMStudioConfig(baseURL: URL(string: "http://localhost:1234")!, modelName: models.next())
+        }
+
+        _ = try await service.translate("你好", to: .english)
+        _ = try await service.translate("你好", to: .english)
+
+        #expect(captured.values == ["model-a", "model-b"])
+    }
+
+    @Test
     func reportsServerErrors() async throws {
         StubURLProtocol.handler = { request in
             let data = #"{"error":"bad"}"#.data(using: .utf8)!
@@ -154,6 +219,24 @@ struct LMStudioTranslationServiceTests {
 
 private final class CapturedRequest: @unchecked Sendable {
     var payload: [String: Any]?
+}
+
+private final class ModelSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var queue: [String]
+    private(set) var values: [String] = []
+
+    init(_ models: [String]) { queue = models }
+
+    func next() -> String {
+        lock.lock(); defer { lock.unlock() }
+        return queue.isEmpty ? "" : queue.removeFirst()
+    }
+
+    func append(_ value: String) {
+        lock.lock(); defer { lock.unlock() }
+        values.append(value)
+    }
 }
 
 private final class StubURLProtocol: URLProtocol, @unchecked Sendable {

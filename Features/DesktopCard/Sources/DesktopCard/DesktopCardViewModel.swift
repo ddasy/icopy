@@ -66,6 +66,9 @@ public final class DesktopCardViewModel: ObservableObject {
 
     public var sections: [StickyCardSection] { card.sections }
 
+    /// 分区按行分组:每行内横向并排,行间纵向堆叠(供视图渲染横/竖分隔)。
+    public var rows: [[StickyCardSection]] { card.rows }
+
     public func setText(_ text: String, sectionID: StickyCardSection.ID) {
         card.setText(text, sectionID: sectionID)
         persistSoon()
@@ -78,8 +81,22 @@ public final class DesktopCardViewModel: ObservableObject {
         return newID
     }
 
-    public func removeDivider(beforeSectionID sectionID: StickyCardSection.ID) {
-        card.removeDivider(beforeSectionID: sectionID)
+    @discardableResult
+    public func insertVerticalDivider(inSectionID sectionID: StickyCardSection.ID, atGraphemeOffset offset: Int, widthFraction: Double) -> StickyCardSection.ID? {
+        let newID = card.insertVerticalDivider(inSectionID: sectionID, atOffset: offset, widthFraction: widthFraction)
+        persistSoon()
+        return newID
+    }
+
+    /// 删除竖向分隔右侧那一列(整块移除,不合并)。
+    public func deleteSection(id: StickyCardSection.ID) {
+        card.deleteSection(id: id)
+        persistSoon()
+    }
+
+    /// 删除横向分隔下方那一整行(含其所有列)。
+    public func deleteRow(startingAtSectionID id: StickyCardSection.ID) {
+        card.deleteRow(startingAtSectionID: id)
         persistSoon()
     }
 

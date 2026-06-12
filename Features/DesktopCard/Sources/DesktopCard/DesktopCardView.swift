@@ -12,6 +12,7 @@ public struct DesktopCardView: View {
 
     @State private var focusedSectionID: StickyCardSection.ID?
     @State private var caretCharOffset: Int = 0
+    @State private var caretXFraction: Double = 0.5
 
     public init(
         viewModel: DesktopCardViewModel,
@@ -68,7 +69,8 @@ public struct DesktopCardView: View {
                 appearance: appearance,
                 onCopied: onCopied,
                 focusedSectionID: $focusedSectionID,
-                caretCharOffset: $caretCharOffset
+                caretCharOffset: $caretCharOffset,
+                caretXFraction: $caretXFraction
             )
         }
     }
@@ -86,7 +88,13 @@ public struct DesktopCardView: View {
                     Image(systemName: "text.insert")
                 }
                 .buttonStyle(.plain)
-                .help("在光标处插入分隔符")
+                .help("在光标处插入横向分隔符")
+
+                Button(action: insertVerticalDivider) {
+                    Image(systemName: "rectangle.split.2x1")
+                }
+                .buttonStyle(.plain)
+                .help("在光标处插入竖向分隔符")
             }
 
             Spacer()
@@ -111,6 +119,17 @@ public struct DesktopCardView: View {
         guard let sectionID = focusedSectionID ?? viewModel.sections.last?.id else { return }
         let offset = focusedSectionID == nil ? (viewModel.sections.last?.text.count ?? 0) : caretCharOffset
         if let newID = viewModel.insertDivider(inSectionID: sectionID, atGraphemeOffset: offset) {
+            focusedSectionID = newID
+            caretCharOffset = 0
+        }
+    }
+
+    private func insertVerticalDivider() {
+        guard let sectionID = focusedSectionID ?? viewModel.sections.last?.id else { return }
+        let atEnd = focusedSectionID == nil
+        let offset = atEnd ? (viewModel.sections.last?.text.count ?? 0) : caretCharOffset
+        let fraction = atEnd ? 0.5 : caretXFraction
+        if let newID = viewModel.insertVerticalDivider(inSectionID: sectionID, atGraphemeOffset: offset, widthFraction: fraction) {
             focusedSectionID = newID
             caretCharOffset = 0
         }

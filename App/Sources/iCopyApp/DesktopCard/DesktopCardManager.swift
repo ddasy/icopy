@@ -63,7 +63,7 @@ final class DesktopCardManager {
         let viewModel = DesktopCardViewModel(
             card: card,
             clipboard: card.isClipboard ? clipboard : nil,
-            translator: LMStudioTranslationService(config: translationPreferences.config),
+            translator: LMStudioTranslationService(configProvider: { TranslationPreferences.currentConfig() }),
             onPersist: { [weak self] updated in self?.persist(updated) }
         )
         let controller = DesktopCardWindowController(

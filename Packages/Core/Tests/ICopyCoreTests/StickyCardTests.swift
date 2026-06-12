@@ -20,6 +20,59 @@ func insertDividerSplitsSectionAtOffset() {
 }
 
 @Test
+func insertVerticalDividerKeepsTailInSameRow() {
+    var card = StickyCardItem(sections: [StickyCardSection(text: "HelloWorld")])
+    let firstID = card.sections[0].id
+
+    let newID = card.insertVerticalDivider(inSectionID: firstID, atOffset: 5)
+
+    #expect(card.sections.count == 2)
+    #expect(card.sections[0].text == "Hello")
+    #expect(card.sections[1].text == "World")
+    #expect(card.sections[0].startsNewRow == true)   // 原分区仍是行首
+    #expect(card.sections[1].startsNewRow == false)  // 新分区并入同一行右侧
+    #expect(card.rows.count == 1)                     // 两列同处一行
+    #expect(card.rows[0].map(\.id) == [firstID, newID])
+}
+
+@Test
+func insertVerticalDividerSplitsWeightAtCursorFraction() {
+    var card = StickyCardItem(sections: [StickyCardSection(text: "HelloWorld")])
+    let firstID = card.sections[0].id
+
+    card.insertVerticalDivider(inSectionID: firstID, atOffset: 5, widthFraction: 0.3)
+
+    // 原列权重 1 按 0.3 切分:左 0.3、右 0.7,分隔线落在光标处。
+    #expect(abs(card.sections[0].columnWeight - 0.3) < 1e-9)
+    #expect(abs(card.sections[1].columnWeight - 0.7) < 1e-9)
+}
+
+@Test
+func insertVerticalDividerClampsExtremeFraction() {
+    var card = StickyCardItem(sections: [StickyCardSection(text: "AB")])
+    let id = card.sections[0].id
+
+    card.insertVerticalDivider(inSectionID: id, atOffset: 1, widthFraction: 0.0)
+
+    // 夹紧到 0.12,避免任一列塌缩。
+    #expect(abs(card.sections[0].columnWeight - 0.12) < 1e-9)
+    #expect(abs(card.sections[1].columnWeight - 0.88) < 1e-9)
+}
+
+@Test
+func rowsGroupHorizontalAndVerticalSplits() {
+    var card = StickyCardItem(sections: [StickyCardSection(text: "A")])
+    let a = card.sections[0].id
+    let b = card.insertDivider(inSectionID: a, atOffset: 1)!          // 横向:另起一行
+    card.setText("BC", sectionID: b)
+    _ = card.insertVerticalDivider(inSectionID: b, atOffset: 1)       // 竖向:第二行加一列
+
+    #expect(card.rows.count == 2)
+    #expect(card.rows[0].count == 1)
+    #expect(card.rows[1].count == 2)
+}
+
+@Test
 func insertDividerClampsOutOfRangeOffset() {
     var card = StickyCardItem(sections: [StickyCardSection(text: "abc")])
     let id = card.sections[0].id
@@ -43,26 +96,76 @@ func insertDividerHandlesUnicodeGraphemeOffsets() {
 }
 
 @Test
-func removeDividerMergesIntoPrevious() {
-    var card = StickyCardItem(sections: [
-        StickyCardSection(text: "Hello"),
-        StickyCardSection(text: "World")
-    ])
-    let secondID = card.sections[1].id
+func deleteSectionRemovesColumnWithoutMergingText() {
+    // 竖向分割出两列,删右列:右列文本整块消失,不并入左列;左列接管其宽度权重。
+    var card = StickyCardItem(sections: [StickyCardSection(text: "HelloWorld")])
+    let leftID = card.sections[0].id
+    let rightID = card.insertVerticalDivider(inSectionID: leftID, atOffset: 5, widthFraction: 0.4)!
 
-    card.removeDivider(beforeSectionID: secondID)
+    let deleted = card.deleteSection(id: rightID)
 
+    #expect(deleted == true)
     #expect(card.sections.count == 1)
-    #expect(card.sections[0].text == "HelloWorld")
+    #expect(card.sections[0].text == "Hello")            // 不合并 "World"
+    #expect(card.rows.count == 1)
+    #expect(abs(card.sections[0].columnWeight - 1.0) < 1e-9) // 左列接管整段宽度(0.4 + 0.6)
 }
 
 @Test
-func removeDividerOnFirstSectionIsNoop() {
+func deleteMiddleColumnKeepsOthersAbsoluteWidthShiftingLeft() {
+    // 一行三列(三条分隔线场景);删中间列:其余列保留各自绝对占比、不重分布,使右列左移补位。
+    var card = StickyCardItem(sections: [
+        StickyCardSection(text: "A", startsNewRow: true, columnWeight: 0.3),
+        StickyCardSection(text: "B", startsNewRow: false, columnWeight: 0.3),
+        StickyCardSection(text: "C", startsNewRow: false, columnWeight: 0.4)
+    ])
+    let bID = card.sections[1].id
+
+    card.deleteSection(id: bID)
+
+    #expect(card.sections.map(\.text) == ["A", "C"])
+    #expect(card.rows.count == 1)
+    #expect(abs(card.sections[0].columnWeight - 0.3) < 1e-9)  // A 宽度不变
+    #expect(abs(card.sections[1].columnWeight - 0.4) < 1e-9)  // C 宽度不变(整体左移、右侧留空)
+}
+
+@Test
+func deleteColumnLeavingSingleColumnRestoresFullWidth() {
+    // 两列删其一 → 该行只剩单列 → 恢复满宽(权重 1)。
+    var card = StickyCardItem(sections: [
+        StickyCardSection(text: "L", startsNewRow: true, columnWeight: 0.4),
+        StickyCardSection(text: "R", startsNewRow: false, columnWeight: 0.6)
+    ])
+    let rID = card.sections[1].id
+
+    card.deleteSection(id: rID)
+
+    #expect(card.sections.count == 1)
+    #expect(abs(card.sections[0].columnWeight - 1.0) < 1e-9)
+}
+
+@Test
+func deleteRowRemovesEntireRowIncludingColumns() {
+    // 第一行单列;第二行竖分成两列。删第二行的横向分隔 → 整行(两列)移除。
+    var card = StickyCardItem(sections: [StickyCardSection(text: "row1")])
+    let firstID = card.sections[0].id
+    let secondID = card.insertDivider(inSectionID: firstID, atOffset: 4)! // 另起一行
+    card.setText("AB", sectionID: secondID)
+    _ = card.insertVerticalDivider(inSectionID: secondID, atOffset: 1)    // 第二行加一列
+
+    #expect(card.rows.count == 2)
+    let deleted = card.deleteRow(startingAtSectionID: secondID)
+
+    #expect(deleted == true)
+    #expect(card.rows.count == 1)
+    #expect(card.sections.count == 1)
+    #expect(card.sections[0].text == "row1")
+}
+
+@Test
+func deleteUnknownSectionIsNoop() {
     var card = StickyCardItem(sections: [StickyCardSection(text: "only")])
-    let id = card.sections[0].id
-
-    card.removeDivider(beforeSectionID: id)
-
+    #expect(card.deleteSection(id: UUID()) == false)
     #expect(card.sections.count == 1)
 }
 
