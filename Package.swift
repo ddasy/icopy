@@ -11,9 +11,11 @@ let package = Package(
         .executable(name: "icopy", targets: ["iCopyApp"]),
         .library(name: "ICopyCore", targets: ["ICopyCore"]),
         .library(name: "ICopyClipboard", targets: ["ICopyClipboard"]),
+        .library(name: "ICopyTranslation", targets: ["ICopyTranslation"]),
         .library(name: "ICopyStorage", targets: ["ICopyStorage"]),
         .library(name: "ICopyUIComponents", targets: ["ICopyUIComponents"]),
-        .library(name: "ClipboardPanel", targets: ["ClipboardPanel"])
+        .library(name: "ClipboardPanel", targets: ["ClipboardPanel"]),
+        .library(name: "DesktopCard", targets: ["DesktopCard"])
     ],
     dependencies: [],
     targets: [
@@ -41,6 +43,18 @@ let package = Package(
             exclude: ["README.md"]
         ),
         .target(
+            name: "ICopyTranslation",
+            dependencies: ["ICopyCore"],
+            path: "Packages/Translation/Sources/ICopyTranslation",
+            exclude: ["README.md"]
+        ),
+        .testTarget(
+            name: "ICopyTranslationTests",
+            dependencies: ["ICopyTranslation"],
+            path: "Packages/Translation/Tests/ICopyTranslationTests",
+            exclude: ["README.md"]
+        ),
+        .target(
             name: "ICopyStorage",
             dependencies: ["ICopyCore"],
             path: "Packages/Storage/Sources/ICopyStorage",
@@ -64,11 +78,23 @@ let package = Package(
             path: "Features/ClipboardPanel/Sources/ClipboardPanel",
             exclude: ["README.md"]
         ),
+        .target(
+            name: "DesktopCard",
+            dependencies: ["ICopyCore", "ICopyClipboard", "ICopyTranslation", "ICopyStorage", "ICopyUIComponents", "ClipboardPanel"],
+            path: "Features/DesktopCard/Sources/DesktopCard",
+            exclude: ["README.md"]
+        ),
+        .testTarget(
+            name: "DesktopCardTests",
+            dependencies: ["DesktopCard"],
+            path: "Features/DesktopCard/Tests/DesktopCardTests",
+            exclude: ["README.md"]
+        ),
         .executableTarget(
             name: "iCopyApp",
-            dependencies: ["ClipboardPanel"],
+            dependencies: ["ClipboardPanel", "DesktopCard", "ICopyTranslation"],
             path: "App/Sources/iCopyApp",
-            exclude: ["README.md"]
+            exclude: ["README.md", "DesktopCard/README.md"]
         )
     ]
 )

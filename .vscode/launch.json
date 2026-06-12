@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:icopy}",
+            "name": "Debug icopy",
+            "target": "icopy",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug icopy"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:icopy}",
+            "name": "Release icopy",
+            "target": "icopy",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release icopy"
+        }
+    ]
+}

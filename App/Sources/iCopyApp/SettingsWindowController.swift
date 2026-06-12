@@ -5,14 +5,17 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController {
     private let appearance: ClipboardAppearancePreferences
+    private let translationPreferences: TranslationPreferences
     private let shortcutSettings: ShortcutSettingsModel
     private var window: NSWindow?
 
     init(
         appearance: ClipboardAppearancePreferences,
+        translationPreferences: TranslationPreferences,
         shortcutSettings: ShortcutSettingsModel
     ) {
         self.appearance = appearance
+        self.translationPreferences = translationPreferences
         self.shortcutSettings = shortcutSettings
     }
 
@@ -28,6 +31,7 @@ final class SettingsWindowController {
     private func makeWindow() -> NSWindow {
         let view = SettingsView(
             appearance: appearance,
+            translationPreferences: translationPreferences,
             shortcutSettings: shortcutSettings
         )
         let controller = NSHostingController(rootView: view)
@@ -62,11 +66,13 @@ final class ShortcutSettingsModel: ObservableObject {
 
 private enum SettingsSection: Hashable {
     case appearance
+    case translation
     case shortcut
 }
 
 private struct SettingsView: View {
     @ObservedObject var appearance: ClipboardAppearancePreferences
+    @ObservedObject var translationPreferences: TranslationPreferences
     @ObservedObject var shortcutSettings: ShortcutSettingsModel
     @State private var section: SettingsSection = .appearance
 
@@ -78,6 +84,8 @@ private struct SettingsView: View {
                 switch section {
                 case .appearance:
                     AppearanceSettingsView(appearance: appearance)
+                case .translation:
+                    TranslationSettingsView(preferences: translationPreferences)
                 case .shortcut:
                     ShortcutSettingsView(settings: shortcutSettings)
                 }
@@ -90,6 +98,7 @@ private struct SettingsView: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 4) {
             sidebarItem(.appearance, title: "外观", icon: "paintbrush")
+            sidebarItem(.translation, title: "翻译", icon: "character.bubble")
             sidebarItem(.shortcut, title: "呼出", icon: "keyboard")
             Spacer()
         }
@@ -118,6 +127,105 @@ private struct SettingsView: View {
             .foregroundStyle(section == target ? Color.accentColor : .primary)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct TranslationSettingsView: View {
+    @ObservedObject var preferences: TranslationPreferences
+    @State private var testState: TestState = .idle
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("翻译")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 12) {
+                settingRow(label: "服务器地址", text: $preferences.baseURL)
+                settingRow(label: "模型名", text: $preferences.modelName)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    testConnection()
+                } label: {
+                    Label("测试连接", systemImage: "network")
+                }
+                .disabled(testState == .testing)
+
+                Button {
+                    preferences.reset()
+                    testState = .idle
+                } label: {
+                    Label("恢复默认", systemImage: "arrow.counterclockwise")
+                }
+            }
+
+            statusView
+
+            Spacer()
+        }
+        .padding(18)
+    }
+
+    private func settingRow(label: String, text: Binding<String>) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .frame(width: 86, alignment: .leading)
+            TextField("", text: text)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 360)
+        }
+    }
+
+    @ViewBuilder
+    private var statusView: some View {
+        switch testState {
+        case .idle:
+            Text("LM Studio 需启动并加载模型。")
+                .foregroundStyle(.secondary)
+        case .testing:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在连接...")
+            }
+            .foregroundStyle(.secondary)
+        case .success(let message):
+            Label(message, systemImage: "checkmark.circle")
+                .foregroundStyle(.green)
+        case .failure(let message):
+            Label(message, systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.red)
+        }
+    }
+
+    private func testConnection() {
+        guard let baseURL = preferences.normalizedBaseURL else {
+            testState = .failure("服务器地址无效")
+            return
+        }
+        testState = .testing
+        Task {
+            do {
+                let (_, response) = try await URLSession.shared.data(from: baseURL.appendingPathComponent("v1/models"))
+                guard let http = response as? HTTPURLResponse else {
+                    testState = .failure("响应格式不正确")
+                    return
+                }
+                testState = (200..<300).contains(http.statusCode)
+                    ? .success("连接成功")
+                    : .failure("服务器返回 \(http.statusCode)")
+            } catch {
+                testState = .failure("连接失败: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private enum TestState: Equatable {
+        case idle
+        case testing
+        case success(String)
+        case failure(String)
     }
 }
 

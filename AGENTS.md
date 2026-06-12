@@ -44,6 +44,7 @@ icopy/
 ├── Packages/             本地 SwiftPM 包(monorepo 各单元),每个子目录一个 Package.swift;同层内部形态保持一致
 │   ├── Core/             领域模型与业务逻辑,无 UI、无平台依赖(剪贴板条目、规则)
 │   ├── Clipboard/        剪贴板监听与采集(NSPasteboard 变更捕获),无业务规则
+│   ├── Translation/      翻译服务(LM Studio 本地 LLM 调用,可注入协议),无 UI
 │   ├── Storage/          持久化层(历史记录读写、检索),无 UI
 │   └── UIComponents/     可复用 SwiftUI 视图组件,纯 UI、无业务语义
 ├── Features/             SwiftUI 功能模块,一个功能一个目录(编排为主:调服务、绑数据、处理事件)

@@ -4,16 +4,18 @@ import SwiftUI
 
 @MainActor
 final class ClipboardPanelWindowController: NSObject, NSWindowDelegate {
-    private let viewModel = ClipboardViewModel()
+    private let viewModel: ClipboardViewModel
     private let appearance: ClipboardAppearancePreferences
     private let openSettings: () -> Void
     private var window: NSWindow?
     private static let savedFrameKey = "clipboardPanel.windowFrame"
 
     init(
+        viewModel: ClipboardViewModel,
         appearance: ClipboardAppearancePreferences,
         openSettings: @escaping () -> Void
     ) {
+        self.viewModel = viewModel
         self.appearance = appearance
         self.openSettings = openSettings
     }
