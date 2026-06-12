@@ -8,16 +8,20 @@ public struct ClipboardPanelView: View {
     @State private var itemBeingRenamed: RenameDraft?
     @State private var itemPendingDeletion: ClipboardItem?
     @State private var expandedItemID: ClipboardItem.ID?
+    @State private var isHoveringClose = false
     private let openSettings: () -> Void
+    private let closePanel: () -> Void
 
     public init(
         viewModel: ClipboardViewModel = ClipboardViewModel(),
         appearance: ClipboardAppearancePreferences = ClipboardAppearancePreferences(),
-        openSettings: @escaping () -> Void = {}
+        openSettings: @escaping () -> Void = {},
+        closePanel: @escaping () -> Void = {}
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         self.appearance = appearance
         self.openSettings = openSettings
+        self.closePanel = closePanel
     }
 
     public var body: some View {
@@ -73,8 +77,20 @@ public struct ClipboardPanelView: View {
 
         return VStack(spacing: 12) {
             HStack(spacing: 10) {
-                Text("iCopy")
-                    .font(.system(size: 15, weight: .semibold))
+                Button(action: closePanel) {
+                    ZStack {
+                        Circle()
+                            .fill(Color(red: 1.0, green: 0.37, blue: 0.34))
+                            .frame(width: 13, height: 13)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Color.black.opacity(0.55))
+                            .opacity(isHoveringClose ? 1 : 0)
+                    }
+                }
+                .buttonStyle(.plain)
+                .onHover { isHoveringClose = $0 }
+                .help("关闭")
 
                 Spacer()
 

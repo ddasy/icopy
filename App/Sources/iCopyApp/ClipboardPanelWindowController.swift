@@ -56,7 +56,8 @@ final class ClipboardPanelWindowController: NSObject, NSWindowDelegate {
             rootView: ClipboardPanelView(
                 viewModel: viewModel,
                 appearance: appearance,
-                openSettings: openSettings
+                openSettings: openSettings,
+                closePanel: { [weak self] in self?.window?.orderOut(nil) }
             )
         )
         let window = NSWindow(contentViewController: controller)

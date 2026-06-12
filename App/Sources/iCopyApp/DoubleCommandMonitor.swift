@@ -8,7 +8,7 @@ final class DoubleCommandMonitor {
     private var isCommandDown = false
     private var lastCommandUpAt: Date?
     private let minimumDoubleTapInterval: TimeInterval = 0.08
-    private let maximumDoubleTapInterval: TimeInterval = 0.35
+    private let maximumDoubleTapInterval: TimeInterval = 0.20
     private var action: (() -> Void)?
 
     func start(action: @escaping () -> Void) {
