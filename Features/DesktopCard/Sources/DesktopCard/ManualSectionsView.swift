@@ -37,6 +37,7 @@ struct ManualSectionsView: View {
                         get: { section.text },
                         set: { viewModel.setText($0, sectionID: section.id) }
                     ),
+                    undoManager: viewModel.undoManager,
                     hasTitle: section.isTitleFolded,
                     titleText: section.title,
                     font: nsFont,
@@ -450,6 +451,8 @@ enum SectionTitlePrompt {
 /// "自定义标题"。右键菜单经 `menu(for:)` 覆写为单项,屏蔽系统默认的查词/翻译/字体等菜单项。
 struct SectionTextView: NSViewRepresentable {
     @Binding var text: String
+    /// 卡片级共享撤销栈:经 `undoManager(for:)` 交给本 NSTextView,使打字撤销与结构编辑撤销同栈。
+    var undoManager: UndoManager
     var hasTitle: Bool
     var titleText: String
     var font: NSFont
@@ -516,6 +519,9 @@ struct SectionTextView: NSViewRepresentable {
         var parent: SectionTextView
 
         init(_ parent: SectionTextView) { self.parent = parent }
+
+        /// 把打字撤销注册进卡片级共享栈,与删列/删行等结构撤销同序排列(由窗口 Cmd+Z 统一驱动)。
+        func undoManager(for view: NSTextView) -> UndoManager? { parent.undoManager }
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
@@ -622,6 +628,15 @@ final class AutoGrowingTextView: NSTextView {
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
         if result { onFocus?() }
+        return result
+    }
+
+    /// 失焦即取消选中(否则残留选区会以灰色高亮停留);折叠到选区起点的零长光标。
+    override func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        if result {
+            setSelectedRange(NSRange(location: selectedRange().location, length: 0))
+        }
         return result
     }
 }

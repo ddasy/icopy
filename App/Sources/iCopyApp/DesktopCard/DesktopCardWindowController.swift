@@ -87,6 +87,10 @@ final class DesktopCardWindowController: NSObject, NSWindowDelegate {
             self?.viewModel.setFrame(frame)
             self?.overlay?.reposition()
         }
+        // 仅手动卡片把 Cmd+Z 路由到卡片撤销栈;其他模式返回 nil,不夺走 SwiftUI 原生撤销。
+        panel.undoManagerProvider = { [weak self] in
+            self?.viewModel.card.isManual == true ? self?.viewModel.undoManager : nil
+        }
 
         let view = DesktopCardView(
             viewModel: viewModel,

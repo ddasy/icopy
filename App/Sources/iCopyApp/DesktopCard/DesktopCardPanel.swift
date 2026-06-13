@@ -12,6 +12,27 @@ final class DesktopCardPanel: NSPanel {
     /// 缩放结束时回传新 frame(由窗口控制器持久化)。
     var onFrameCommitted: ((NSRect) -> Void)?
 
+    /// 提供当前应响应 Cmd+Z 的撤销栈(无 Edit 菜单的无边框面板需自行路由);返回 nil 则不拦截,放行系统默认。
+    /// 由窗口控制器按卡片模式注入:仅手动卡片返回其撤销栈,剪贴板/翻译卡片返回 nil(不夺走原生撤销)。
+    var undoManagerProvider: (() -> UndoManager?)?
+
+    /// 拦截 Cmd+Z(撤销)/ Cmd+Shift+Z(重做)路由到卡片撤销栈。无边框面板无主菜单 Undo 项,Cmd+Z 默认无效;
+    /// 在 performKeyEquivalent 截获,使焦点无论落在文本框还是删除按钮后按键都生效。其他按键交还系统。
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if let manager = undoManagerProvider?(),
+           event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command),
+           event.charactersIgnoringModifiers?.lowercased() == "z" {
+            let redo = event.modifierFlags.contains(.shift)
+            if redo {
+                if manager.canRedo { manager.redo() }
+            } else {
+                if manager.canUndo { manager.undo() }
+            }
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     struct ResizeEdges: OptionSet {
         let rawValue: Int
         static let left = ResizeEdges(rawValue: 1)

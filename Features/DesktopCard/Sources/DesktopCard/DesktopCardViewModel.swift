@@ -19,6 +19,11 @@ public final class DesktopCardViewModel: ObservableObject {
     /// 翻译管线与活跃状态(注入了 translator 时非 nil);视图的方向行/译文区直接观察它。
     public let translationController: TranslationController?
 
+    /// 本卡片的撤销栈(手动模式 Cmd+Z/Cmd+Shift+Z):分区结构编辑(删列/删行/插分隔/调宽/标题)经
+    /// 快照注册可撤销;文本框打字撤销由各 NSTextView 原生注册进同一管理器(见 SectionTextView),故两类
+    /// 操作共用一条按时间排序的撤销链。窗口层由 DesktopCardPanel.performKeyEquivalent 路由按键到此。
+    public let undoManager = UndoManager()
+
     private let pasteboard: PasteboardWriting
     private let onPersist: (StickyCardItem) -> Void
     private var persistTask: Task<Void, Never>?
@@ -76,46 +81,74 @@ public final class DesktopCardViewModel: ObservableObject {
 
     /// 设置分区自定义标题并折叠(右键菜单触发)。立即持久化,折叠即时生效。
     public func setTitle(_ title: String, sectionID: StickyCardSection.ID) {
+        let before = card
         card.setTitle(title.trimmingCharacters(in: .whitespacesAndNewlines), sectionID: sectionID)
+        registerUndo(restoring: before)
         persistNow()
     }
 
     /// 退出折叠显示原文,保留标题文本供下次回填(右键菜单触发)。
     public func showOriginal(sectionID: StickyCardSection.ID) {
+        let before = card
         card.showOriginal(sectionID: sectionID)
+        registerUndo(restoring: before)
         persistNow()
     }
 
     @discardableResult
     public func insertDivider(inSectionID sectionID: StickyCardSection.ID, atGraphemeOffset offset: Int) -> StickyCardSection.ID? {
+        let before = card
         let newID = card.insertDivider(inSectionID: sectionID, atOffset: offset)
+        if newID != nil { registerUndo(restoring: before) }
         persistSoon()
         return newID
     }
 
     @discardableResult
     public func insertVerticalDivider(inSectionID sectionID: StickyCardSection.ID, atGraphemeOffset offset: Int, widthFraction: Double) -> StickyCardSection.ID? {
+        let before = card
         let newID = card.insertVerticalDivider(inSectionID: sectionID, atOffset: offset, widthFraction: widthFraction)
+        if newID != nil { registerUndo(restoring: before) }
         persistSoon()
         return newID
     }
 
     /// 拖动竖向分隔:在相邻两列间重新分配宽度(把左列权重设为 leftWeight,右列取剩余)。
     public func resizeColumn(leftID: StickyCardSection.ID, rightID: StickyCardSection.ID, leftWeight: Double) {
+        let before = card
         guard card.resizeColumn(leftID: leftID, rightID: rightID, leftWeight: leftWeight) else { return }
+        registerUndo(restoring: before)
         persistSoon()
     }
 
     /// 删除竖向分隔右侧那一列(整块移除,不合并)。
     public func deleteSection(id: StickyCardSection.ID) {
-        card.deleteSection(id: id)
+        let before = card
+        guard card.deleteSection(id: id) else { return }
+        registerUndo(restoring: before)
         persistSoon()
     }
 
     /// 删除横向分隔下方那一整行(含其所有列)。
     public func deleteRow(startingAtSectionID id: StickyCardSection.ID) {
-        card.deleteRow(startingAtSectionID: id)
+        let before = card
+        guard card.deleteRow(startingAtSectionID: id) else { return }
+        registerUndo(restoring: before)
         persistSoon()
+    }
+
+    // MARK: - 撤销(手动结构编辑)
+
+    /// 注册一次"恢复到 snapshot"的撤销动作。撤销触发时,先抓当前态作为重做快照,回填 snapshot,
+    /// 再注册逆向动作——此时 UndoManager 处于 isUndoing,逆向注册自动归入重做栈,故 Cmd+Shift+Z 可重做,
+    /// 二者来回切换。文本框原生打字撤销共用 `undoManager`,与此按时间顺序穿插。
+    private func registerUndo(restoring snapshot: StickyCardItem) {
+        undoManager.registerUndo(withTarget: self) { vm in
+            let inverse = vm.card
+            vm.card = snapshot
+            vm.registerUndo(restoring: inverse)
+            vm.persistNow()
+        }
     }
 
     /// 锁定态单击分区时由覆盖层调用。空白分区不复制(返回 false)。
