@@ -74,6 +74,18 @@ public final class DesktopCardViewModel: ObservableObject {
         persistSoon()
     }
 
+    /// 设置分区自定义标题并折叠(右键菜单触发)。立即持久化,折叠即时生效。
+    public func setTitle(_ title: String, sectionID: StickyCardSection.ID) {
+        card.setTitle(title.trimmingCharacters(in: .whitespacesAndNewlines), sectionID: sectionID)
+        persistNow()
+    }
+
+    /// 退出折叠显示原文,保留标题文本供下次回填(右键菜单触发)。
+    public func showOriginal(sectionID: StickyCardSection.ID) {
+        card.showOriginal(sectionID: sectionID)
+        persistNow()
+    }
+
     @discardableResult
     public func insertDivider(inSectionID sectionID: StickyCardSection.ID, atGraphemeOffset offset: Int) -> StickyCardSection.ID? {
         let newID = card.insertDivider(inSectionID: sectionID, atOffset: offset)

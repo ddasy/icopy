@@ -21,39 +21,57 @@ public enum StickyCardLockState: String, Codable, Equatable, Hashable, Sendable 
 /// 手动卡片中一个可独立复制的分区。稳定 id 在编辑过程中保持不变,供锁定态单击复制按 id 寻址。
 /// `startsNewRow` 为 true 时另起一行(横向分隔);为 false 时并入上一分区所在行的右侧(竖向分隔)。
 /// `columnWeight` 为同一行内的相对宽度权重(竖向分隔在光标处切分时按比例分配,使分隔线落在光标位置)。
+/// `title` 为自定义标题文本(持久保留,即便"显示原文"也不清空,供下次自定义时回填);`showsTitle` 为
+/// 是否处于折叠态:折叠时显示单行标题、隐藏原文,但复制仍写原文,标题绝不入剪贴板。
 public struct StickyCardSection: Identifiable, Codable, Equatable, Hashable, Sendable {
     public let id: UUID
     public var text: String
     public var startsNewRow: Bool
     public var columnWeight: Double
+    public var title: String
+    public var showsTitle: Bool
 
-    public init(id: UUID = UUID(), text: String = "", startsNewRow: Bool = true, columnWeight: Double = 1) {
+    public init(id: UUID = UUID(), text: String = "", startsNewRow: Bool = true, columnWeight: Double = 1, title: String = "", showsTitle: Bool = false) {
         self.id = id
         self.text = text
         self.startsNewRow = startsNewRow
         self.columnWeight = columnWeight
+        self.title = title
+        self.showsTitle = showsTitle
     }
 
     public var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// 锁定态单击时实际写入剪贴板的文本(去除首尾空白)。
+    /// 当前是否折叠展示标题(已开启折叠且标题去空白后非空)。
+    public var isTitleFolded: Bool {
+        showsTitle && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 折叠后展示的文本:折叠态取标题(单行),否则取原文。
+    public var displayText: String {
+        isTitleFolded ? title : text
+    }
+
+    /// 锁定态单击时实际写入剪贴板的文本(去除首尾空白);恒为原文,与标题无关。
     public var copyableText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, text, startsNewRow, columnWeight
+        case id, text, startsNewRow, columnWeight, title, showsTitle
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         text = try container.decode(String.self, forKey: .text)
-        // 旧数据无此字段:默认另起一行、等宽,保持既有纵向布局不变。
+        // 旧数据无这些字段:默认另起一行、等宽、无标题、未折叠,保持既有纵向布局不变。
         startsNewRow = try container.decodeIfPresent(Bool.self, forKey: .startsNewRow) ?? true
         columnWeight = try container.decodeIfPresent(Double.self, forKey: .columnWeight) ?? 1
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        showsTitle = try container.decodeIfPresent(Bool.self, forKey: .showsTitle) ?? false
     }
 }
 
@@ -195,6 +213,21 @@ public struct StickyCardItem: Identifiable, Codable, Equatable, Hashable, Sendab
     public mutating func setText(_ text: String, sectionID: StickyCardSection.ID, now: Date = Date()) {
         guard let index = sections.firstIndex(where: { $0.id == sectionID }) else { return }
         sections[index].text = text
+        updatedAt = now
+    }
+
+    /// 设置自定义标题并进入折叠态(非空时)。标题文本始终保留,供"显示原文"后再次自定义时回填。
+    public mutating func setTitle(_ title: String, sectionID: StickyCardSection.ID, now: Date = Date()) {
+        guard let index = sections.firstIndex(where: { $0.id == sectionID }) else { return }
+        sections[index].title = title
+        sections[index].showsTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        updatedAt = now
+    }
+
+    /// 退出折叠态显示原文,但保留标题文本(下次自定义时回填);原文不动。
+    public mutating func showOriginal(sectionID: StickyCardSection.ID, now: Date = Date()) {
+        guard let index = sections.firstIndex(where: { $0.id == sectionID }) else { return }
+        sections[index].showsTitle = false
         updatedAt = now
     }
 

@@ -17,7 +17,8 @@ struct ManualSectionsView: View {
     var body: some View {
         if viewModel.card.isLocked {
             sectionsScroll(canDelete: false) { section in
-                Text(section.isEmpty ? " " : section.text)
+                // 锁定态:折叠则显示标题(单行),否则显示原文;单击复制恒为原文(不含标题)。
+                Text(section.isTitleFolded ? section.title : (section.isEmpty ? " " : section.text))
                     .font(appearance.swiftUIFont)
                     .foregroundStyle(appearance.swiftUITextColor)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -36,12 +37,25 @@ struct ManualSectionsView: View {
                         get: { section.text },
                         set: { viewModel.setText($0, sectionID: section.id) }
                     ),
+                    hasTitle: section.isTitleFolded,
+                    titleText: section.title,
                     font: nsFont,
                     textColor: nsTextColor,
                     onFocus: { focusedSectionID = section.id },
                     onCaret: { offset, fraction in
                         caretCharOffset = offset
                         caretXFraction = fraction
+                    },
+                    onCustomTitle: {
+                        // 回填上一次的标题(显示原文后仍保留),便于二次自定义。
+                        if let title = SectionTitlePrompt.run(initial: section.title), !title.isEmpty {
+                            viewModel.setTitle(title, sectionID: section.id)
+                        }
+                    },
+                    onShowOriginal: { viewModel.showOriginal(sectionID: section.id) },
+                    onTitleClick: {
+                        // 折叠态左键直接复制原文(不含标题),与锁定态一致。
+                        if viewModel.copySection(id: section.id) { onCopied() }
                     }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -411,14 +425,40 @@ private struct DeleteBadge: View {
     }
 }
 
+/// 弹出一个文本输入框采集自定义标题。右键菜单触发,运行模态;返回输入(取消返回 nil)。
+enum SectionTitlePrompt {
+    @MainActor
+    static func run(initial: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = "自定义标题"
+        alert.informativeText = "输入标题后该分区折叠为单行;锁定后单击复制仍复制原文。"
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.stringValue = initial
+        field.placeholderString = "标题"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        return field.stringValue
+    }
+}
+
 /// 自适应高度的 NSTextView 包装:编辑中的文本框在选区变化时同源上报焦点与光标(字符偏移 + 横向占比)。
 /// SwiftUI 的 TextEditor 无法暴露光标位置,而"在光标处插入分隔符"需要它,故下沉到 AppKit。
+/// `hasTitle` 时改为只读展示单行标题(隐藏原文),右键菜单换为"显示原文";否则编辑原文,右键菜单为
+/// "自定义标题"。右键菜单经 `menu(for:)` 覆写为单项,屏蔽系统默认的查词/翻译/字体等菜单项。
 struct SectionTextView: NSViewRepresentable {
     @Binding var text: String
+    var hasTitle: Bool
+    var titleText: String
     var font: NSFont
     var textColor: NSColor
     var onFocus: () -> Void
     var onCaret: (Int, Double) -> Void
+    var onCustomTitle: () -> Void
+    var onShowOriginal: () -> Void
+    var onTitleClick: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -427,33 +467,49 @@ struct SectionTextView: NSViewRepresentable {
         tv.delegate = context.coordinator
         tv.onFocus = onFocus
         tv.isRichText = false
-        tv.isEditable = true
         tv.isSelectable = true
         tv.drawsBackground = false
         tv.allowsUndo = true
         tv.font = font
         tv.textColor = textColor
-        tv.string = text
         tv.textContainerInset = NSSize(width: 0, height: 2)
         tv.isVerticallyResizable = false
         tv.isHorizontallyResizable = false
         tv.textContainer?.widthTracksTextView = true
         tv.textContainer?.lineFragmentPadding = 0
+        apply(to: tv)
         return tv
     }
 
     func updateNSView(_ tv: AutoGrowingTextView, context: Context) {
         context.coordinator.parent = self
-        if tv.string != text { tv.string = text }
         tv.font = font
         tv.textColor = textColor
+        apply(to: tv)
         tv.invalidateIntrinsicContentSize()
     }
 
+    /// 同步编辑/标题两态:标题态只读且显示标题(单行),编辑态可编辑且回填原文;并刷新右键菜单/折叠点击回调。
+    private func apply(to tv: AutoGrowingTextView) {
+        tv.sectionHasTitle = hasTitle
+        tv.onCustomTitle = onCustomTitle
+        tv.onShowOriginal = onShowOriginal
+        tv.onTitleClick = onTitleClick
+        tv.isEditable = !hasTitle
+        let desired = hasTitle ? titleText : text
+        if tv.string != desired { tv.string = desired }
+    }
+
     /// 按列宽测高:文本随列变窄而换行,行高据此增长,横向分隔线才会下移而非被压在下层之上。
+    /// 当外层已给定行高(竖向分隔后整行取最高列的高度)时,撑满该高度——否则空/矮列只占一行高,
+    /// 其下方留白不属于文本视图,点击不到、无法落光标输入。
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: AutoGrowingTextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
-        return CGSize(width: width, height: nsView.measuredHeight(forWidth: width))
+        let measured = nsView.measuredHeight(forWidth: width)
+        if let height = proposal.height, height.isFinite, height > measured {
+            return CGSize(width: width, height: height)
+        }
+        return CGSize(width: width, height: measured)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -467,6 +523,7 @@ struct SectionTextView: NSViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
+            guard !parent.hasTitle else { return }
             guard let tv = notification.object as? NSTextView else { return }
             guard tv.window?.firstResponder === tv else { return }
             let nsString = tv.string as NSString
@@ -498,6 +555,42 @@ struct SectionTextView: NSViewRepresentable {
 
 final class AutoGrowingTextView: NSTextView {
     var onFocus: (() -> Void)?
+    /// 当前分区是否处于标题(折叠)态:决定右键菜单项是"显示原文"还是"自定义标题",并把左键改为复制。
+    var sectionHasTitle = false
+    var onCustomTitle: (() -> Void)?
+    var onShowOriginal: (() -> Void)?
+    var onTitleClick: (() -> Void)?
+
+    /// 覆写右键菜单为单项,屏蔽系统默认的查词/翻译/剪切/字体等;有标题显示"显示原文",否则"自定义标题"。
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        let item = sectionHasTitle
+            ? NSMenuItem(title: "显示原文", action: #selector(showOriginalAction), keyEquivalent: "")
+            : NSMenuItem(title: "自定义标题", action: #selector(customTitleAction), keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+        return menu
+    }
+
+    @objc private func customTitleAction() { onCustomTitle?() }
+    @objc private func showOriginalAction() { onShowOriginal?() }
+
+    /// 折叠态:左键单击直接复制原文,不进入文本选择;否则走正常编辑选择。
+    override func mouseDown(with event: NSEvent) {
+        if sectionHasTitle {
+            onTitleClick?()
+            return
+        }
+        super.mouseDown(with: event)
+    }
+
+    override func resetCursorRects() {
+        if sectionHasTitle {
+            addCursorRect(bounds, cursor: .pointingHand)
+        } else {
+            super.resetCursorRects()
+        }
+    }
 
     override var intrinsicContentSize: NSSize {
         guard let layoutManager, let textContainer else { return super.intrinsicContentSize }

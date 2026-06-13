@@ -95,6 +95,27 @@ func insertDividerHandlesUnicodeGraphemeOffsets() {
     #expect(card.sections[1].text == "b")
 }
 
+// MARK: - 自定义标题
+
+@Test
+func setTitleFoldsAndShowOriginalRemembersTitle() {
+    var card = StickyCardItem(sections: [StickyCardSection(text: "line1\nline2\nline3")])
+    let id = card.sections[0].id
+
+    card.setTitle("摘要", sectionID: id)
+    #expect(card.sections[0].isTitleFolded)              // 进入折叠态
+    #expect(card.sections[0].displayText == "摘要")       // 折叠后只展示标题
+    #expect(card.sections[0].copyableText == "line1\nline2\nline3") // 复制仍为原文
+
+    card.showOriginal(sectionID: id)
+    #expect(!card.sections[0].isTitleFolded)             // 退出折叠
+    #expect(card.sections[0].displayText == "line1\nline2\nline3")
+    #expect(card.sections[0].title == "摘要")             // 标题文本保留,供回填
+
+    card.setTitle("", sectionID: id)
+    #expect(!card.sections[0].isTitleFolded)             // 空标题不折叠
+}
+
 @Test
 func deleteSectionRemovesColumnWithoutMergingText() {
     // 竖向分割出两列,删右列:右列文本整块消失,不并入左列;左列接管其宽度权重。
