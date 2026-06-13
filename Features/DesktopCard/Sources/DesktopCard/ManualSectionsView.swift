@@ -631,11 +631,17 @@ final class AutoGrowingTextView: NSTextView {
         return result
     }
 
-    /// 失焦即取消选中(否则残留选区会以灰色高亮停留);折叠到选区起点的零长光标。
+    /// 失焦即取消选中(否则残留选区会以灰色高亮停留)。仅当确有非空选区时折叠,且延到响应者切换完成后的
+    /// 下一轮 runloop 再做——在 resignFirstResponder 内直接 setSelectedRange 会让刚失焦的本视图重新画出光标,
+    /// 与新聚焦视图的光标并存(双光标)。延后并复核本视图已非第一响应者后才折叠,规避此重入。
     override func resignFirstResponder() -> Bool {
         let result = super.resignFirstResponder()
-        if result {
-            setSelectedRange(NSRange(location: selectedRange().location, length: 0))
+        if result, selectedRange().length > 0 {
+            let collapsed = NSRange(location: selectedRange().location, length: 0)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.window?.firstResponder !== self else { return }
+                self.setSelectedRange(collapsed)
+            }
         }
         return result
     }
